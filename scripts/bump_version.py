@@ -52,7 +52,7 @@ def bump_version(part="patch"):
 
 def git_commands(version):
     tag = f"v{version}"
-    print(f"\nReady to execute:")
+    print("\nReady to execute:")
     print(f"  git add {VERSION_FILE}")
     print(f'  git commit -m "Bump version to {version}"')
     print(f"  git tag {tag}")

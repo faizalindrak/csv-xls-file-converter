@@ -591,7 +591,7 @@ def process_existing_files(folder_path, output_folder=None, delete_source=False)
                 os.remove(file_path_str)
                 print("[Deleted] Source removed")
         else:
-            print(f"[Failed] Could not convert")
+            print("[Failed] Could not convert")
 
 
 def monitor_folder(
