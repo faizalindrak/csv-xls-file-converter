@@ -6,7 +6,6 @@ Context and guidelines for AI agents working in this codebase.
 
 Python utility for converting CSV and XLS files to XLSX.
 - **CLI**: `file_converter.py` (includes folder monitoring)
-- **BOM Utility**: `converts.py` (multi-level BOM processing)
 - **GUI**: `gui.py` (PySide6 + PyQt-Fluent-Widgets)
 - **Platform**: Windows primary (required for XLS conversion), cross-platform for CSV.
 
@@ -42,7 +41,6 @@ ruff check .
 ```
 .
 ├── file_converter.py   # Core logic, CLI, Watchdog monitoring
-├── converts.py         # BOM conversion (uses pandas)
 ├── gui.py              # PySide6 application
 └── requirements.txt    # Dependencies
 ```
@@ -60,6 +58,7 @@ ruff check .
 - **Type Hints**: Mandatory in `gui.py`, optional but recommended elsewhere.
 
 ### Essential Patterns
+
 
 **1. Optional Dependency Handling**
 ```python
@@ -115,4 +114,4 @@ def sanitize(val): return ILLEGAL_CHARACTERS_RE.sub('', val) if isinstance(val, 
 ## Dependencies
 - Core: `xlsxwriter`, `watchdog`
 - GUI: `PySide6`, `PySide6-Fluent-Widgets`
-- Optional: `pandas` (only used in `converts.py`)
+- Optional: `pandas` (not currently used)

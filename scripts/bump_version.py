@@ -56,7 +56,7 @@ def git_commands(version):
     print(f"  git add {VERSION_FILE}")
     print(f'  git commit -m "Bump version to {version}"')
     print(f"  git tag {tag}")
-    print(f"  git push origin main")
+    print("  git push origin main")
     print(f"  git push origin {tag}")
 
     confirm = input("\nExecute these git commands? (y/n): ")
@@ -66,7 +66,7 @@ def git_commands(version):
         os.system(f"git tag {tag}")
         print("\nLocal changes committed and tagged.")
         print("To push to GitHub and trigger release build:")
-        print(f"  git push origin main")
+        print("  git push origin main")
         print(f"  git push origin {tag}")
 
 

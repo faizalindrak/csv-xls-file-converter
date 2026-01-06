@@ -70,7 +70,7 @@ def detect_date_format_for_column(values):
         # Check ambiguous formats
         match = re.match(r"^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$", val)
         if match:
-            first, second, year = (
+            first, second, _ = (
                 int(match.group(1)),
                 int(match.group(2)),
                 match.group(3),
@@ -406,7 +406,7 @@ def convert_xls_to_xlsx(source_path, output_path):
 
         creation_flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
-        result = subprocess.run(
+        subprocess.run(
             ["cscript", "//Nologo", abs_vbs_path, abs_xls_path, abs_xlsx_path],
             check=True,
             capture_output=True,
@@ -589,7 +589,7 @@ def process_existing_files(folder_path, output_folder=None, delete_source=False)
             print(f"[Success] Created: {output_path}")
             if delete_source:
                 os.remove(file_path_str)
-                print(f"[Deleted] Source removed")
+                print("[Deleted] Source removed")
         else:
             print(f"[Failed] Could not convert")
 
