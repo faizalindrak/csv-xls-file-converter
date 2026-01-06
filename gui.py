@@ -3,10 +3,7 @@ import os
 import time
 import json
 import uuid
-from threading import Thread
 from queue import Queue, Empty
-from collections import deque
-import shutil
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Optional, List
@@ -19,12 +16,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QFileDialog,
-    QLabel,
-    QFrame,
-    QSizePolicy,
 )
-from PySide6.QtCore import Qt, QThread, Signal, QSize
-from PySide6.QtGui import QIcon, QColor
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QColor
 
 from qfluentwidgets import (
     FluentWindow,
@@ -43,21 +37,16 @@ from qfluentwidgets import (
     InfoBar,
     InfoBarPosition,
     ProgressRing,
-    StateToolTip,
     StrongBodyLabel,
     TitleLabel,
     IconWidget,
     Theme,
     setTheme,
-    ThemeColor,
-    isDarkTheme,
     SmoothScrollArea,
     TransparentToolButton,
     ToolTipFilter,
-    ToolTipPosition,
     toggleTheme,
     MessageBoxBase,
-    Dialog,
 )
 
 # Import converter functions
@@ -70,7 +59,7 @@ from file_converter import convert_to_xlsx, WATCHDOG_AVAILABLE
 
 if WATCHDOG_AVAILABLE:
     from watchdog.observers import Observer
-    from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedEvent
+    from watchdog.events import FileSystemEventHandler
 
 
 # ============================================================================
@@ -374,7 +363,7 @@ class MonitorThread(QThread):
         """Add file to processing queue with overflow protection."""
         try:
             self._file_queue.put_nowait(file_path)
-        except:
+        except Exception:
             self.log_signal.emit(f"Queue full, skipped: {os.path.basename(file_path)}")
 
     def process_existing_files(self):
