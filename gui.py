@@ -1,11 +1,17 @@
 import sys
 import os
 import time
+import json
+import uuid
 from threading import Thread
 from queue import Queue, Empty
 from collections import deque
 import shutil
 from pathlib import Path
+from dataclasses import dataclass, field, asdict
+from typing import Dict, Optional, List
+
+__version__ = "0.2.0"
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -50,6 +56,8 @@ from qfluentwidgets import (
     ToolTipFilter,
     ToolTipPosition,
     toggleTheme,
+    MessageBoxBase,
+    Dialog,
 )
 
 # Import converter functions
@@ -73,6 +81,102 @@ BATCH_DELAY = 0.1  # Seconds between batches (prevents CPU spikes)
 FILE_DELAY = 0.05  # Seconds between individual files
 MAX_QUEUE_SIZE = 10000  # Maximum pending files in queue
 DISCOVERY_CHUNK_SIZE = 100  # Files to discover before yielding
+
+
+# Config file path - use AppData for persistence across updates
+def get_config_path():
+    """Get config file path in user's AppData folder."""
+    if sys.platform == "win32":
+        app_data = os.environ.get("APPDATA", os.path.expanduser("~"))
+    else:
+        app_data = os.path.expanduser("~/.config")
+
+    config_dir = os.path.join(app_data, "csv-xls-converter")
+    os.makedirs(config_dir, exist_ok=True)
+    return os.path.join(config_dir, "profiles.json")
+
+
+CONFIG_FILE = get_config_path()
+
+
+# ============================================================================
+# Profile Data Model
+# ============================================================================
+@dataclass
+class MonitorProfile:
+    """Data model for a monitoring profile/preset."""
+
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = "New Profile"
+    watch_folder: str = ""
+    output_folder: str = ""
+    enabled: bool = False
+    delete_source: bool = False
+    process_existing: bool = True
+    auto_detect_dates: bool = False
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "MonitorProfile":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+class ProfileManager:
+    """Manages loading, saving, and CRUD operations for monitor profiles."""
+
+    def __init__(self, config_path: str = CONFIG_FILE):
+        self.config_path = config_path
+        self.profiles: Dict[str, MonitorProfile] = {}
+        self.load()
+
+    def load(self):
+        """Load profiles from JSON file."""
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for profile_data in data.get("profiles", []):
+                        profile = MonitorProfile.from_dict(profile_data)
+                        self.profiles[profile.id] = profile
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Warning: Could not load profiles: {e}")
+
+    def save(self):
+        """Save profiles to JSON file."""
+        try:
+            data = {"profiles": [p.to_dict() for p in self.profiles.values()]}
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except IOError as e:
+            print(f"Warning: Could not save profiles: {e}")
+
+    def add(self, profile: MonitorProfile) -> MonitorProfile:
+        """Add a new profile."""
+        self.profiles[profile.id] = profile
+        self.save()
+        return profile
+
+    def update(self, profile: MonitorProfile):
+        """Update an existing profile."""
+        if profile.id in self.profiles:
+            self.profiles[profile.id] = profile
+            self.save()
+
+    def delete(self, profile_id: str):
+        """Delete a profile by ID."""
+        if profile_id in self.profiles:
+            del self.profiles[profile_id]
+            self.save()
+
+    def get(self, profile_id: str) -> Optional[MonitorProfile]:
+        """Get a profile by ID."""
+        return self.profiles.get(profile_id)
+
+    def get_all(self) -> List[MonitorProfile]:
+        """Get all profiles."""
+        return list(self.profiles.values())
 
 
 class LogSignal(QThread):
@@ -362,6 +466,215 @@ class MonitorThread(QThread):
         except Exception as e:
             self.log_signal.emit(
                 f"Error converting {os.path.basename(source_path)}: {e}"
+            )
+
+
+# ============================================================================
+# Profile UI Components
+# ============================================================================
+
+
+class ProfileEditDialog(MessageBoxBase):
+    """Dialog for creating/editing a monitor profile."""
+
+    def __init__(self, parent=None, profile: MonitorProfile = None):
+        super().__init__(parent)
+        self.profile = profile or MonitorProfile()
+        self._is_new = profile is None
+
+        self.titleLabel = SubtitleLabel(
+            "New Profile" if self._is_new else "Edit Profile", self
+        )
+
+        # Profile name
+        self.name_edit = LineEdit(self)
+        self.name_edit.setPlaceholderText("Profile name...")
+        self.name_edit.setText(self.profile.name)
+        self.name_edit.setClearButtonEnabled(True)
+
+        # Watch folder
+        watch_layout = QHBoxLayout()
+        watch_layout.setSpacing(8)
+        self.watch_edit = LineEdit(self)
+        self.watch_edit.setPlaceholderText("Folder to monitor...")
+        self.watch_edit.setText(self.profile.watch_folder)
+        self.watch_btn = PushButton(FluentIcon.FOLDER, "Browse", self)
+        self.watch_btn.clicked.connect(self._browse_watch)
+        watch_layout.addWidget(self.watch_edit)
+        watch_layout.addWidget(self.watch_btn)
+
+        # Output folder
+        output_layout = QHBoxLayout()
+        output_layout.setSpacing(8)
+        self.output_edit = LineEdit(self)
+        self.output_edit.setPlaceholderText(
+            "Output folder (optional, same as watch)..."
+        )
+        self.output_edit.setText(self.profile.output_folder)
+        self.output_btn = PushButton(FluentIcon.FOLDER, "Browse", self)
+        self.output_btn.clicked.connect(self._browse_output)
+        output_layout.addWidget(self.output_edit)
+        output_layout.addWidget(self.output_btn)
+
+        # Options
+        options_layout = QHBoxLayout()
+        options_layout.setContentsMargins(0, 8, 0, 0)
+
+        self.process_existing_switch = SwitchButton(self)
+        self.process_existing_switch.setChecked(self.profile.process_existing)
+        options_layout.addWidget(self.process_existing_switch)
+        options_layout.addWidget(BodyLabel("Process existing"))
+        options_layout.addSpacing(12)
+
+        self.delete_source_switch = SwitchButton(self)
+        self.delete_source_switch.setChecked(self.profile.delete_source)
+        options_layout.addWidget(self.delete_source_switch)
+        options_layout.addWidget(BodyLabel("Delete source"))
+        options_layout.addSpacing(12)
+
+        self.auto_dates_switch = SwitchButton(self)
+        self.auto_dates_switch.setChecked(self.profile.auto_detect_dates)
+        options_layout.addWidget(self.auto_dates_switch)
+        options_layout.addWidget(BodyLabel("Dates (β)"))
+        options_layout.addStretch(1)
+
+        # Add to view layout
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addSpacing(12)
+        self.viewLayout.addWidget(StrongBodyLabel("Profile Name"))
+        self.viewLayout.addWidget(self.name_edit)
+        self.viewLayout.addSpacing(8)
+        self.viewLayout.addWidget(StrongBodyLabel("Watch Folder"))
+        self.viewLayout.addLayout(watch_layout)
+        self.viewLayout.addSpacing(8)
+        self.viewLayout.addWidget(StrongBodyLabel("Output Folder (Optional)"))
+        self.viewLayout.addLayout(output_layout)
+        self.viewLayout.addSpacing(8)
+        self.viewLayout.addWidget(StrongBodyLabel("Options"))
+        self.viewLayout.addLayout(options_layout)
+
+        self.widget.setMinimumWidth(450)
+        self.yesButton.setText("Save")
+        self.cancelButton.setText("Cancel")
+
+    def _browse_watch(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Watch Folder")
+        if folder:
+            self.watch_edit.setText(folder)
+
+    def _browse_output(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Output Folder")
+        if folder:
+            self.output_edit.setText(folder)
+
+    def get_profile(self) -> MonitorProfile:
+        """Get the edited profile data."""
+        self.profile.name = self.name_edit.text().strip() or "Unnamed Profile"
+        self.profile.watch_folder = self.watch_edit.text().strip()
+        self.profile.output_folder = self.output_edit.text().strip()
+        self.profile.process_existing = self.process_existing_switch.isChecked()
+        self.profile.delete_source = self.delete_source_switch.isChecked()
+        self.profile.auto_detect_dates = self.auto_dates_switch.isChecked()
+        return self.profile
+
+
+class ProfileCard(SimpleCardWidget):
+    """Card widget representing a single monitor profile."""
+
+    # Signals
+    toggled = Signal(str, bool)  # profile_id, enabled
+    edit_requested = Signal(str)  # profile_id
+    delete_requested = Signal(str)  # profile_id
+
+    def __init__(self, profile: MonitorProfile, parent=None):
+        super().__init__(parent)
+        self.profile = profile
+        self.monitor_thread: Optional[MonitorThread] = None
+
+        self.setFixedHeight(90)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(12)
+
+        # Enable/Disable switch
+        self.enable_switch = SwitchButton()
+        self.enable_switch.setChecked(profile.enabled)
+        self.enable_switch.checkedChanged.connect(self._on_toggle)
+        layout.addWidget(self.enable_switch)
+
+        # Profile info
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
+
+        self.name_label = StrongBodyLabel(profile.name)
+        self.path_label = CaptionLabel(profile.watch_folder or "No folder set")
+        self.path_label.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+
+        # Status label
+        self.status_label = CaptionLabel("Inactive")
+        self.status_label.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+
+        info_layout.addWidget(self.name_label)
+        info_layout.addWidget(self.path_label)
+        info_layout.addWidget(self.status_label)
+        layout.addLayout(info_layout, 1)
+
+        # Progress ring (hidden by default)
+        self.progress_ring = ProgressRing()
+        self.progress_ring.setFixedSize(20, 20)
+        self.progress_ring.setStrokeWidth(3)
+        self.progress_ring.hide()
+        layout.addWidget(self.progress_ring)
+
+        # Action buttons
+        self.edit_btn = TransparentToolButton(FluentIcon.EDIT)
+        self.edit_btn.setFixedSize(32, 32)
+        self.edit_btn.clicked.connect(lambda: self.edit_requested.emit(self.profile.id))
+        self.edit_btn.installEventFilter(ToolTipFilter(self.edit_btn, showDelay=300))
+        self.edit_btn.setToolTip("Edit profile")
+
+        self.delete_btn = TransparentToolButton(FluentIcon.DELETE)
+        self.delete_btn.setFixedSize(32, 32)
+        self.delete_btn.clicked.connect(
+            lambda: self.delete_requested.emit(self.profile.id)
+        )
+        self.delete_btn.installEventFilter(
+            ToolTipFilter(self.delete_btn, showDelay=300)
+        )
+        self.delete_btn.setToolTip("Delete profile")
+
+        layout.addWidget(self.edit_btn)
+        layout.addWidget(self.delete_btn)
+
+    def _on_toggle(self, checked):
+        self.toggled.emit(self.profile.id, checked)
+
+    def update_profile(self, profile: MonitorProfile):
+        """Update the displayed profile data."""
+        self.profile = profile
+        self.name_label.setText(profile.name)
+        self.path_label.setText(profile.watch_folder or "No folder set")
+
+    def set_running(self, is_running: bool):
+        """Update UI to reflect running state."""
+        if is_running:
+            self.progress_ring.show()
+            self.status_label.setText("Active")
+            self.status_label.setTextColor(QColor(0, 164, 0), QColor(80, 200, 80))
+            self.edit_btn.setEnabled(False)
+            self.delete_btn.setEnabled(False)
+        else:
+            self.progress_ring.hide()
+            self.status_label.setText("Inactive")
+            self.status_label.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+            self.edit_btn.setEnabled(True)
+            self.delete_btn.setEnabled(True)
+
+    def set_stats(self, converted: int, skipped: int):
+        """Update stats display."""
+        if converted > 0 or skipped > 0:
+            self.status_label.setText(
+                f"Active - {converted} converted, {skipped} skipped"
             )
 
 
@@ -807,29 +1120,255 @@ class HomePage(QWidget):
 
 
 class MonitorPage(QWidget):
+    """Page for managing multiple monitor profiles."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.profile_manager = ProfileManager()
+        self.profile_cards: Dict[str, ProfileCard] = {}
+        self.monitor_threads: Dict[str, MonitorThread] = {}
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(8)
+        layout.setSpacing(12)
 
-        # Title
+        # Header
+        header_layout = QHBoxLayout()
         title_label = TitleLabel("Folder Monitoring")
-        layout.addWidget(title_label)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch(1)
+
+        self.add_profile_btn = PrimaryPushButton(FluentIcon.ADD, "Add Profile")
+        self.add_profile_btn.clicked.connect(self._add_profile)
+        header_layout.addWidget(self.add_profile_btn)
+        layout.addLayout(header_layout)
 
         layout.addWidget(
-            CaptionLabel("Automatically convert files dropped into a folder.")
+            CaptionLabel("Create profiles to monitor multiple folders simultaneously.")
         )
 
-        # Card
-        self.card = FolderMonitorCard()
-        layout.addWidget(self.card)
+        # Scrollable profile list
+        self.scroll_area = SmoothScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
+
+        self.scroll_content = QWidget()
+        self.scroll_content.setStyleSheet("background: transparent;")
+        self.profiles_layout = QVBoxLayout(self.scroll_content)
+        self.profiles_layout.setContentsMargins(0, 0, 0, 0)
+        self.profiles_layout.setSpacing(8)
+        self.profiles_layout.addStretch(1)
+
+        self.scroll_area.setWidget(self.scroll_content)
+        layout.addWidget(self.scroll_area, 1)
+
+        # Activity Log Section
+        log_header = QHBoxLayout()
+        log_label = StrongBodyLabel("Activity Log")
+        self.clear_log_btn = TransparentToolButton(FluentIcon.DELETE)
+        self.clear_log_btn.setFixedSize(24, 24)
+        self.clear_log_btn.clicked.connect(self._clear_log)
+        self.clear_log_btn.installEventFilter(
+            ToolTipFilter(self.clear_log_btn, showDelay=300)
+        )
+        self.clear_log_btn.setToolTip("Clear log")
+        log_header.addWidget(log_label)
+        log_header.addStretch(1)
+        log_header.addWidget(self.clear_log_btn)
+        layout.addLayout(log_header)
+
+        self.log_text = TextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setFixedHeight(120)
+        self.log_text.setPlaceholderText("Activity will appear here...")
+        layout.addWidget(self.log_text)
+
+        # Load existing profiles
+        self._load_profiles()
+
+    def _load_profiles(self):
+        """Load and display all saved profiles."""
+        for profile in self.profile_manager.get_all():
+            self._create_profile_card(profile)
+
+        # Show empty state if no profiles
+        if not self.profile_cards:
+            self._show_empty_state()
+
+    def _show_empty_state(self):
+        """Show empty state message."""
+        # Will be hidden when first profile is added
+        pass
+
+    def _create_profile_card(self, profile: MonitorProfile) -> ProfileCard:
+        """Create and add a profile card to the list."""
+        card = ProfileCard(profile)
+        card.toggled.connect(self._on_profile_toggled)
+        card.edit_requested.connect(self._edit_profile)
+        card.delete_requested.connect(self._delete_profile)
+
+        # Insert before the stretch
+        self.profiles_layout.insertWidget(self.profiles_layout.count() - 1, card)
+        self.profile_cards[profile.id] = card
+        return card
+
+    def _add_profile(self):
+        """Show dialog to add a new profile."""
+        dialog = ProfileEditDialog(self.window())
+        if dialog.exec():
+            profile = dialog.get_profile()
+            self.profile_manager.add(profile)
+            self._create_profile_card(profile)
+            self._log(f"Profile created: {profile.name}")
+
+    def _edit_profile(self, profile_id: str):
+        """Show dialog to edit an existing profile."""
+        profile = self.profile_manager.get(profile_id)
+        if not profile:
+            return
+
+        dialog = ProfileEditDialog(self.window(), profile)
+        if dialog.exec():
+            updated_profile = dialog.get_profile()
+            self.profile_manager.update(updated_profile)
+
+            # Update the card
+            if profile_id in self.profile_cards:
+                self.profile_cards[profile_id].update_profile(updated_profile)
+
+            self._log(f"Profile updated: {updated_profile.name}")
+
+    def _delete_profile(self, profile_id: str):
+        """Delete a profile after confirmation."""
+        profile = self.profile_manager.get(profile_id)
+        if not profile:
+            return
+
+        # Stop monitoring if running
+        self._stop_monitor(profile_id)
+
+        # Remove card
+        if profile_id in self.profile_cards:
+            card = self.profile_cards.pop(profile_id)
+            self.profiles_layout.removeWidget(card)
+            card.deleteLater()
+
+        self.profile_manager.delete(profile_id)
+        self._log(f"Profile deleted: {profile.name}")
+
+    def _on_profile_toggled(self, profile_id: str, enabled: bool):
+        """Handle profile enable/disable toggle."""
+        profile = self.profile_manager.get(profile_id)
+        if not profile:
+            return
+
+        profile.enabled = enabled
+        self.profile_manager.update(profile)
+
+        if enabled:
+            self._start_monitor(profile)
+        else:
+            self._stop_monitor(profile_id)
+
+    def _start_monitor(self, profile: MonitorProfile):
+        """Start monitoring for a profile."""
+        if not profile.watch_folder or not os.path.isdir(profile.watch_folder):
+            InfoBar.error(
+                title="Invalid Folder",
+                content=f"Watch folder not found: {profile.watch_folder}",
+                parent=self.window(),
+                position=InfoBarPosition.TOP,
+            )
+            # Reset toggle
+            if profile.id in self.profile_cards:
+                self.profile_cards[profile.id].enable_switch.setChecked(False)
+            return
+
+        if not WATCHDOG_AVAILABLE:
+            InfoBar.error(
+                title="Missing Dependency",
+                content="Watchdog library is required. Run 'pip install watchdog'",
+                parent=self.window(),
+                position=InfoBarPosition.TOP,
+            )
+            if profile.id in self.profile_cards:
+                self.profile_cards[profile.id].enable_switch.setChecked(False)
+            return
+
+        # Create and start monitor thread
+        thread = MonitorThread(
+            profile.watch_folder,
+            profile.output_folder or None,
+            profile.delete_source,
+            profile.process_existing,
+            profile.auto_detect_dates,
+        )
+        thread.log_signal.connect(lambda msg: self._log(f"[{profile.name}] {msg}"))
+        thread.status_signal.connect(
+            lambda running: self._on_monitor_status(profile.id, running)
+        )
+        thread.stats_signal.connect(
+            lambda d, c, s, cb, tb: self._on_monitor_stats(profile.id, c, s)
+        )
+
+        self.monitor_threads[profile.id] = thread
+        thread.start()
+
+        if profile.id in self.profile_cards:
+            self.profile_cards[profile.id].set_running(True)
+
+        self._log(f"Started monitoring: {profile.name}")
+
+    def _stop_monitor(self, profile_id: str):
+        """Stop monitoring for a profile."""
+        if profile_id in self.monitor_threads:
+            thread = self.monitor_threads[profile_id]
+            if thread.isRunning():
+                thread.stop()
+                thread.wait(5000)  # Wait up to 5 seconds
+            del self.monitor_threads[profile_id]
+
+        if profile_id in self.profile_cards:
+            self.profile_cards[profile_id].set_running(False)
+
+    def _on_monitor_status(self, profile_id: str, is_running: bool):
+        """Handle monitor status changes."""
+        if profile_id in self.profile_cards:
+            self.profile_cards[profile_id].set_running(is_running)
+
+            if not is_running:
+                # Update toggle state
+                profile = self.profile_manager.get(profile_id)
+                if profile:
+                    profile.enabled = False
+                    self.profile_manager.update(profile)
+                    self.profile_cards[profile_id].enable_switch.setChecked(False)
+
+    def _on_monitor_stats(self, profile_id: str, converted: int, skipped: int):
+        """Handle monitor stats updates."""
+        if profile_id in self.profile_cards:
+            self.profile_cards[profile_id].set_stats(converted, skipped)
+
+    def _log(self, message: str):
+        """Append message to activity log."""
+        self.log_text.append(f"[{time.strftime('%H:%M:%S')}] {message}")
+
+    def _clear_log(self):
+        """Clear the activity log."""
+        self.log_text.clear()
+
+    def stop_all_monitors(self):
+        """Stop all running monitors (called on app close)."""
+        for profile_id in list(self.monitor_threads.keys()):
+            self._stop_monitor(profile_id)
 
 
 class MainWindow(FluentWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("CSV/XLS to XLSX Converter")
+        self.setWindowTitle(f"CSV/XLS to XLSX Converter v{__version__}")
         self.resize(850, 650)
 
         # Theme - Auto detect system theme
@@ -884,6 +1423,11 @@ class MainWindow(FluentWindow):
 
     def toggle_theme(self):
         toggleTheme(lazy=True)
+
+    def closeEvent(self, event):
+        """Stop all monitors before closing."""
+        self.monitor_page.stop_all_monitors()
+        super().closeEvent(event)
 
 
 def main():
