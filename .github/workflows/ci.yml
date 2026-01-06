@@ -33,7 +33,9 @@ jobs:
       # No tests yet, but this placeholder ensures we're ready
       # Exit code 5 means "no tests collected", which is fine for now
       run: |
-        pytest || if ($LASTEXITCODE -eq 5) { exit 0 } else { exit $LASTEXITCODE }
+        pytest
+        if ($LASTEXITCODE -eq 5) { exit 0 }
+        if ($LASTEXITCODE -ne 0) { exit 1 }
 
     - name: Verify Version Import
       run: |
