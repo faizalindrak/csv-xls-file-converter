@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        
+    - name: Lint with Ruff
+      run: |
+        ruff check .
+        
+    - name: Test with pytest
+      # No tests yet, but this placeholder ensures we're ready
+      # Exit code 5 means "no tests collected", which is fine for now
+      run: |
+        pytest || if ($LASTEXITCODE -eq 5) { exit 0 } else { exit $LASTEXITCODE }
+
+    - name: Verify Version Import
+      run: |
+        python -c "from _version import __version__; print(f'Version: {__version__}')"
+
+    - name: Dry Run Build (ensure PyInstaller works)
+      run: |
+        pyinstaller --noconfirm --clean --onefile --windowed --name "CSV-Converter-Check" gui.py

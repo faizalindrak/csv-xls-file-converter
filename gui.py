@@ -11,7 +11,7 @@ from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Optional, List
 
-__version__ = "0.2.0"
+from _version import __version__
 
 from PySide6.QtWidgets import (
     QApplication,
