@@ -59,15 +59,16 @@ jobs:
           # Update installer.iss
           (Get-Content installer.iss) -replace '#define MyAppVersion "[^"]+"', "#define MyAppVersion `"$version`"" | Set-Content installer.iss
 
-      - name: Build portable executable
+      - name: Build executable
         run: |
           pyinstaller --clean --noconfirm CSV-XLS-Converter.spec
           
-      - name: Rename portable executable
+      - name: Prepare portable executable
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
-          Rename-Item -Path "dist\CSV-XLS-Converter.exe" -NewName "CSV-XLS-Converter-$version-Portable.exe"
+          # Copy for portable release (with version suffix)
+          Copy-Item -Path "dist\CSV-XLS-Converter.exe" -Destination "dist\CSV-XLS-Converter-$version-Portable.exe"
 
       - name: Install Inno Setup
         shell: pwsh
@@ -84,14 +85,10 @@ jobs:
           $innoPath = "C:\Program Files (x86)\Inno Setup 6"
           echo "$innoPath" >> $env:GITHUB_PATH
 
-      - name: Build portable exe for installer
-        run: |
-          # Rebuild clean exe (without version suffix) for installer
-          pyinstaller --clean --noconfirm CSV-XLS-Converter.spec
-
       - name: Build installer
         shell: pwsh
         run: |
+          # Installer uses dist\CSV-XLS-Converter.exe (without version suffix)
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
 
       - name: List build outputs
