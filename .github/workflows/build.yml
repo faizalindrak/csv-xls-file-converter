@@ -116,6 +116,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     
     steps:
+      - name: Checkout for changelog
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            CHANGELOG.md
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -123,12 +129,6 @@ jobs:
 
       - name: List artifacts
         run: find artifacts -type f -name "*.exe"
-
-      - name: Checkout for changelog
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            CHANGELOG.md
 
       - name: Extract changelog for version
         id: changelog
