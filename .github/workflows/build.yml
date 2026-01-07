@@ -128,13 +128,26 @@ jobs:
         run: find artifacts -type f -name "*.exe"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
-          files: |
-            artifacts/portable-exe/*.exe
-            artifacts/installer/*.exe
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if release exists and delete it
+          if gh release view ${{ github.ref_name }} --repo ${{ github.repository }} > /dev/null 2>&1; then
+            echo "Deleting existing release..."
+            gh release delete ${{ github.ref_name }} --repo ${{ github.repository }} --yes
+          fi
+          
+          # Determine if prerelease
+          PRERELEASE_FLAG=""
+          if [[ "${{ github.ref_name }}" == *"-"* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          
+          # Create release with assets
+          gh release create ${{ github.ref_name }} \
+            --repo ${{ github.repository }} \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes \
+            $PRERELEASE_FLAG \
+            artifacts/portable-exe/*.exe \
+            artifacts/installer/*.exe
