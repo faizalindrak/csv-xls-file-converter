@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.5] - 2026-01-07
+
+### Added
+- Settings page with global application settings
+- Auto-startup option to launch app with Windows
+- Windows registry integration for startup management
+
 ## [0.2.4] - 2026-01-07
 
 ### Added
