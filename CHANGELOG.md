@@ -1,0 +1,46 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [0.2.4] - 2026-01-07
+
+### Added
+- Updated AGENTS.md with comprehensive build, CI/CD, and configuration documentation
+
+### Fixed
+- Auto-start folder monitors for previously enabled profiles on app launch
+
+## [0.2.3] - 2026-01-07
+
+### Added
+- Persist single file conversion settings (remove_backticks, auto_detect_dates)
+- Remember last used input/output directories in file dialogs
+- Settings saved to `%APPDATA%\csv-xls-converter\profiles.json`
+- `SingleFileSettings` dataclass for storing conversion preferences
+- Shared `ProfileManager` instance between HomePage and MonitorPage
+
+### Fixed
+- Auto-start monitors for previously enabled profiles on app launch
+
+## [0.2.2] - 2026-01-07
+
+### Added
+- Windows installer build with Inno Setup
+- GitHub Actions CI/CD workflow for automated builds
+- `build.bat` for local build automation
+- `installer.iss` Inno Setup script
+- Produces both portable exe and installer on tag push
+
+### Changed
+- Updated `.gitignore` to include PyInstaller spec file
+
+## [0.2.1] - 2026-01-06
+
+### Added
+- Initial release with GUI and CLI
+- CSV to XLSX conversion
+- XLS to XLSX conversion (Windows only, requires Excel)
+- Folder monitoring with automatic conversion
+- Multiple monitor profiles support
+- Date detection (beta feature)
+- Modern Fluent UI design

@@ -127,6 +127,36 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f -name "*.exe"
 
+      - name: Checkout for changelog
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            CHANGELOG.md
+
+      - name: Extract changelog for version
+        id: changelog
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix
+          
+          # Extract section for this version from CHANGELOG.md
+          if [ -f CHANGELOG.md ]; then
+            # Extract content between this version header and next version header
+            NOTES=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+            
+            if [ -n "$NOTES" ]; then
+              echo "Found changelog for version ${VERSION}"
+              # Save to file for multi-line support
+              echo "$NOTES" > release_notes.md
+            else
+              echo "No changelog found for version ${VERSION}, using auto-generated notes"
+              echo "" > release_notes.md
+            fi
+          else
+            echo "CHANGELOG.md not found, using auto-generated notes"
+            echo "" > release_notes.md
+          fi
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -143,11 +173,23 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
           
-          # Create release with assets
-          gh release create ${{ github.ref_name }} \
-            --repo ${{ github.repository }} \
-            --title "Release ${{ github.ref_name }}" \
-            --generate-notes \
-            $PRERELEASE_FLAG \
-            artifacts/portable-exe/*.exe \
-            artifacts/installer/*.exe
+          # Check if we have custom release notes
+          if [ -s release_notes.md ]; then
+            # Use custom changelog notes
+            gh release create ${{ github.ref_name }} \
+              --repo ${{ github.repository }} \
+              --title "Release ${{ github.ref_name }}" \
+              --notes-file release_notes.md \
+              $PRERELEASE_FLAG \
+              artifacts/portable-exe/*.exe \
+              artifacts/installer/*.exe
+          else
+            # Fallback to auto-generated notes
+            gh release create ${{ github.ref_name }} \
+              --repo ${{ github.repository }} \
+              --title "Release ${{ github.ref_name }}" \
+              --generate-notes \
+              $PRERELEASE_FLAG \
+              artifacts/portable-exe/*.exe \
+              artifacts/installer/*.exe
+          fi
