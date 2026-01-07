@@ -1258,6 +1258,9 @@ class MonitorPage(QWidget):
         """Load and display all saved profiles."""
         for profile in self.profile_manager.get_all():
             self._create_profile_card(profile)
+            # Auto-start monitors for profiles that were enabled
+            if profile.enabled:
+                self._start_monitor(profile)
 
         # Show empty state if no profiles
         if not self.profile_cards:
