@@ -89,8 +89,25 @@ CONFIG_FILE = get_config_path()
 
 
 # ============================================================================
-# Profile Data Model
+# Data Models
 # ============================================================================
+@dataclass
+class SingleFileSettings:
+    """Settings for single file conversion (persisted)."""
+
+    last_input_dir: str = ""
+    last_output_dir: str = ""
+    remove_backticks: bool = False
+    auto_detect_dates: bool = False
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SingleFileSettings":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
 @dataclass
 class MonitorProfile:
     """Data model for a monitoring profile/preset."""
@@ -113,15 +130,16 @@ class MonitorProfile:
 
 
 class ProfileManager:
-    """Manages loading, saving, and CRUD operations for monitor profiles."""
+    """Manages loading, saving, and CRUD operations for monitor profiles and settings."""
 
     def __init__(self, config_path: str = CONFIG_FILE):
         self.config_path = config_path
         self.profiles: Dict[str, MonitorProfile] = {}
+        self.single_file_settings: SingleFileSettings = SingleFileSettings()
         self.load()
 
     def load(self):
-        """Load profiles from JSON file."""
+        """Load profiles and settings from JSON file."""
         if os.path.exists(self.config_path):
             try:
                 with open(self.config_path, "r", encoding="utf-8") as f:
@@ -129,17 +147,30 @@ class ProfileManager:
                     for profile_data in data.get("profiles", []):
                         profile = MonitorProfile.from_dict(profile_data)
                         self.profiles[profile.id] = profile
+                    # Load single file settings
+                    if "single_file_settings" in data:
+                        self.single_file_settings = SingleFileSettings.from_dict(
+                            data["single_file_settings"]
+                        )
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Warning: Could not load profiles: {e}")
 
     def save(self):
-        """Save profiles to JSON file."""
+        """Save profiles and settings to JSON file."""
         try:
-            data = {"profiles": [p.to_dict() for p in self.profiles.values()]}
+            data = {
+                "profiles": [p.to_dict() for p in self.profiles.values()],
+                "single_file_settings": self.single_file_settings.to_dict(),
+            }
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except IOError as e:
             print(f"Warning: Could not save profiles: {e}")
+
+    def update_single_file_settings(self, settings: SingleFileSettings):
+        """Update single file conversion settings."""
+        self.single_file_settings = settings
+        self.save()
 
     def add(self, profile: MonitorProfile) -> MonitorProfile:
         """Add a new profile."""
@@ -670,8 +701,9 @@ class ProfileCard(SimpleCardWidget):
 class SingleFileCard(ElevatedCardWidget):
     """Card for single file conversion with elevated shadow effect"""
 
-    def __init__(self, parent=None):
+    def __init__(self, profile_manager: ProfileManager, parent=None):
         super().__init__(parent)
+        self.profile_manager = profile_manager
         self.setBorderRadius(8)
 
         self.main_layout = QVBoxLayout(self)
@@ -753,20 +785,64 @@ class SingleFileCard(ElevatedCardWidget):
         self.convert_btn.clicked.connect(self.start_conversion)
         self.main_layout.addWidget(self.convert_btn)
 
+        # Load saved settings
+        self._load_settings()
+
+        # Connect switch changes to save settings
+        self.remove_backticks_switch.checkedChanged.connect(self._save_settings)
+        self.auto_detect_dates_switch.checkedChanged.connect(self._save_settings)
+
+    def _load_settings(self):
+        """Load saved settings from profile manager."""
+        settings = self.profile_manager.single_file_settings
+        self.output_path_edit.setText(settings.last_output_dir)
+        self.remove_backticks_switch.setChecked(settings.remove_backticks)
+        self.auto_detect_dates_switch.setChecked(settings.auto_detect_dates)
+
+    def _save_settings(self):
+        """Save current settings to profile manager."""
+        settings = SingleFileSettings(
+            last_input_dir=self._get_last_input_dir(),
+            last_output_dir=self.output_path_edit.text(),
+            remove_backticks=self.remove_backticks_switch.isChecked(),
+            auto_detect_dates=self.auto_detect_dates_switch.isChecked(),
+        )
+        self.profile_manager.update_single_file_settings(settings)
+
+    def _get_last_input_dir(self) -> str:
+        """Get directory of current input file or last used dir."""
+        input_path = self.input_path_edit.text()
+        if input_path and os.path.exists(input_path):
+            return os.path.dirname(input_path)
+        return self.profile_manager.single_file_settings.last_input_dir
+
     def browse_input(self):
+        # Use last input directory as starting point
+        start_dir = self.profile_manager.single_file_settings.last_input_dir
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Select File",
-            "",
+            start_dir,
             "Supported Files (*.csv *.xls);;CSV Files (*.csv);;XLS Files (*.xls)",
         )
         if file_path:
             self.input_path_edit.setText(file_path)
+            # Save the directory for next time
+            self._save_settings()
 
     def browse_output(self):
-        folder_path = QFileDialog.getExistingDirectory(self, "Select Output Folder")
+        # Use last output directory or input directory as starting point
+        start_dir = self.output_path_edit.text()
+        if not start_dir:
+            start_dir = self.profile_manager.single_file_settings.last_output_dir
+        if not start_dir:
+            start_dir = self._get_last_input_dir()
+        folder_path = QFileDialog.getExistingDirectory(
+            self, "Select Output Folder", start_dir
+        )
         if folder_path:
             self.output_path_edit.setText(folder_path)
+            self._save_settings()
 
     def start_conversion(self):
         input_path = self.input_path_edit.text()
@@ -1088,8 +1164,9 @@ class FolderMonitorCard(ElevatedCardWidget):
 
 
 class HomePage(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, profile_manager: ProfileManager, parent=None):
         super().__init__(parent)
+        self.profile_manager = profile_manager
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(8)
@@ -1103,7 +1180,7 @@ class HomePage(QWidget):
         )
 
         # Card
-        self.card = SingleFileCard()
+        self.card = SingleFileCard(profile_manager)
         layout.addWidget(self.card)
         layout.addStretch(1)
 
@@ -1111,9 +1188,9 @@ class HomePage(QWidget):
 class MonitorPage(QWidget):
     """Page for managing multiple monitor profiles."""
 
-    def __init__(self, parent=None):
+    def __init__(self, profile_manager: ProfileManager, parent=None):
         super().__init__(parent)
-        self.profile_manager = ProfileManager()
+        self.profile_manager = profile_manager
         self.profile_cards: Dict[str, ProfileCard] = {}
         self.monitor_threads: Dict[str, MonitorThread] = {}
 
@@ -1363,11 +1440,14 @@ class MainWindow(FluentWindow):
         # Theme - Auto detect system theme
         setTheme(Theme.AUTO)
 
+        # Shared profile manager for all pages
+        self.profile_manager = ProfileManager()
+
         # Pages
-        self.home_page = HomePage(self)
+        self.home_page = HomePage(self.profile_manager, self)
         self.home_page.setObjectName("home")
 
-        self.monitor_page = MonitorPage(self)
+        self.monitor_page = MonitorPage(self.profile_manager, self)
         self.monitor_page.setObjectName("monitor")
 
         # Navigation - Top items
