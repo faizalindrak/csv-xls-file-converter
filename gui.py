@@ -1291,6 +1291,9 @@ class MonitorPage(QWidget):
         self.profile_manager = profile_manager
         self.profile_cards: Dict[str, ProfileCard] = {}
         self.monitor_threads: Dict[str, MonitorThread] = {}
+        self._is_shutting_down = (
+            False  # Flag to prevent saving enabled=False on app close
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -1505,7 +1508,8 @@ class MonitorPage(QWidget):
         if profile_id in self.profile_cards:
             self.profile_cards[profile_id].set_running(is_running)
 
-            if not is_running:
+            # Only update saved state if not shutting down and monitor stopped unexpectedly
+            if not is_running and not self._is_shutting_down:
                 # Update toggle state
                 profile = self.profile_manager.get(profile_id)
                 if profile:
@@ -1528,6 +1532,7 @@ class MonitorPage(QWidget):
 
     def stop_all_monitors(self):
         """Stop all running monitors (called on app close)."""
+        self._is_shutting_down = True  # Prevent saving enabled=False
         for profile_id in list(self.monitor_threads.keys()):
             self._stop_monitor(profile_id)
 

@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - Auto-startup option to launch app with Windows
 - Windows registry integration for startup management
 
+### Fixed
+- Profile enabled state now persists correctly across app restarts
+
 ## [0.2.4] - 2026-01-07
 
 ### Added
