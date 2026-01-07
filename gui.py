@@ -87,10 +87,96 @@ def get_config_path():
 
 CONFIG_FILE = get_config_path()
 
+# Windows startup registry key
+STARTUP_REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+STARTUP_APP_NAME = "CSV-XLS-Converter"
+
+
+def get_executable_path() -> str:
+    """Get the path to the current executable or script."""
+    if getattr(sys, "frozen", False):
+        # Running as compiled executable (PyInstaller)
+        return sys.executable
+    else:
+        # Running as script
+        return os.path.abspath(sys.argv[0])
+
+
+def set_auto_startup(enable: bool) -> bool:
+    """Enable or disable Windows auto-startup via registry.
+
+    Returns True if successful, False otherwise.
+    """
+    if sys.platform != "win32":
+        return False
+
+    try:
+        import winreg
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            STARTUP_REG_KEY,
+            0,
+            winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE,
+        )
+
+        if enable:
+            exe_path = get_executable_path()
+            # Add quotes around path in case of spaces
+            winreg.SetValueEx(key, STARTUP_APP_NAME, 0, winreg.REG_SZ, f'"{exe_path}"')
+        else:
+            try:
+                winreg.DeleteValue(key, STARTUP_APP_NAME)
+            except FileNotFoundError:
+                pass  # Already removed
+
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        print(f"Failed to set auto-startup: {e}")
+        return False
+
+
+def is_auto_startup_enabled() -> bool:
+    """Check if auto-startup is currently enabled in Windows registry."""
+    if sys.platform != "win32":
+        return False
+
+    try:
+        import winreg
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, STARTUP_REG_KEY, 0, winreg.KEY_QUERY_VALUE
+        )
+
+        try:
+            winreg.QueryValueEx(key, STARTUP_APP_NAME)
+            winreg.CloseKey(key)
+            return True
+        except FileNotFoundError:
+            winreg.CloseKey(key)
+            return False
+    except Exception:
+        return False
+
 
 # ============================================================================
 # Data Models
 # ============================================================================
+@dataclass
+class GlobalSettings:
+    """Global application settings (persisted)."""
+
+    auto_startup: bool = False
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "GlobalSettings":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
 @dataclass
 class SingleFileSettings:
     """Settings for single file conversion (persisted)."""
@@ -136,6 +222,7 @@ class ProfileManager:
         self.config_path = config_path
         self.profiles: Dict[str, MonitorProfile] = {}
         self.single_file_settings: SingleFileSettings = SingleFileSettings()
+        self.global_settings: GlobalSettings = GlobalSettings()
         self.load()
 
     def load(self):
@@ -152,6 +239,11 @@ class ProfileManager:
                         self.single_file_settings = SingleFileSettings.from_dict(
                             data["single_file_settings"]
                         )
+                    # Load global settings
+                    if "global_settings" in data:
+                        self.global_settings = GlobalSettings.from_dict(
+                            data["global_settings"]
+                        )
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Warning: Could not load profiles: {e}")
 
@@ -161,6 +253,7 @@ class ProfileManager:
             data = {
                 "profiles": [p.to_dict() for p in self.profiles.values()],
                 "single_file_settings": self.single_file_settings.to_dict(),
+                "global_settings": self.global_settings.to_dict(),
             }
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
@@ -170,6 +263,11 @@ class ProfileManager:
     def update_single_file_settings(self, settings: SingleFileSettings):
         """Update single file conversion settings."""
         self.single_file_settings = settings
+        self.save()
+
+    def update_global_settings(self, settings: GlobalSettings):
+        """Update global application settings."""
+        self.global_settings = settings
         self.save()
 
     def add(self, profile: MonitorProfile) -> MonitorProfile:
@@ -1434,6 +1532,95 @@ class MonitorPage(QWidget):
             self._stop_monitor(profile_id)
 
 
+class SettingsPage(QWidget):
+    """Page for global application settings."""
+
+    def __init__(self, profile_manager: ProfileManager, parent=None):
+        super().__init__(parent)
+        self.profile_manager = profile_manager
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        # Title
+        title_label = TitleLabel("Settings")
+        layout.addWidget(title_label)
+
+        layout.addWidget(CaptionLabel("Configure global application settings."))
+
+        # Settings Card
+        settings_card = ElevatedCardWidget()
+        settings_card.setBorderRadius(8)
+        card_layout = QVBoxLayout(settings_card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(16)
+
+        # Auto-startup setting
+        startup_layout = QHBoxLayout()
+        startup_layout.setSpacing(12)
+
+        startup_info = QVBoxLayout()
+        startup_info.setSpacing(2)
+        startup_title = StrongBodyLabel("Start with Windows")
+        startup_desc = CaptionLabel(
+            "Automatically launch the application when Windows starts"
+        )
+        startup_desc.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+        startup_info.addWidget(startup_title)
+        startup_info.addWidget(startup_desc)
+        startup_layout.addLayout(startup_info, 1)
+
+        self.auto_startup_switch = SwitchButton()
+        # Initialize from both saved setting and actual registry state
+        actual_state = is_auto_startup_enabled()
+        saved_state = self.profile_manager.global_settings.auto_startup
+        # Sync if they differ (registry is source of truth)
+        if actual_state != saved_state:
+            self.profile_manager.global_settings.auto_startup = actual_state
+            self.profile_manager.save()
+        self.auto_startup_switch.setChecked(actual_state)
+        self.auto_startup_switch.checkedChanged.connect(self._on_auto_startup_changed)
+        startup_layout.addWidget(self.auto_startup_switch)
+
+        card_layout.addLayout(startup_layout)
+
+        # Platform note for non-Windows
+        if sys.platform != "win32":
+            note_label = CaptionLabel("Note: Auto-startup is only available on Windows")
+            note_label.setTextColor(QColor(200, 150, 50), QColor(200, 150, 50))
+            card_layout.addWidget(note_label)
+            self.auto_startup_switch.setEnabled(False)
+
+        card_layout.addStretch(1)
+        layout.addWidget(settings_card)
+        layout.addStretch(1)
+
+    def _on_auto_startup_changed(self, checked: bool):
+        """Handle auto-startup toggle."""
+        success = set_auto_startup(checked)
+        if success:
+            self.profile_manager.global_settings.auto_startup = checked
+            self.profile_manager.save()
+            InfoBar.success(
+                title="Settings Updated",
+                content=f"Auto-startup {'enabled' if checked else 'disabled'}",
+                parent=self.window(),
+                position=InfoBarPosition.TOP,
+                duration=3000,
+            )
+        else:
+            # Revert the switch if failed
+            self.auto_startup_switch.setChecked(not checked)
+            InfoBar.error(
+                title="Error",
+                content="Failed to update auto-startup setting",
+                parent=self.window(),
+                position=InfoBarPosition.TOP,
+                duration=3000,
+            )
+
+
 class MainWindow(FluentWindow):
     def __init__(self):
         super().__init__()
@@ -1453,6 +1640,9 @@ class MainWindow(FluentWindow):
         self.monitor_page = MonitorPage(self.profile_manager, self)
         self.monitor_page.setObjectName("monitor")
 
+        self.settings_page = SettingsPage(self.profile_manager, self)
+        self.settings_page.setObjectName("settings")
+
         # Navigation - Top items
         self.addSubInterface(
             self.home_page,
@@ -1467,7 +1657,14 @@ class MainWindow(FluentWindow):
             NavigationItemPosition.TOP,
         )
 
-        # Navigation - Bottom items (theme toggle)
+        # Navigation - Bottom items
+        self.addSubInterface(
+            self.settings_page,
+            FluentIcon.SETTING,
+            "Settings",
+            NavigationItemPosition.BOTTOM,
+        )
+
         self.navigationInterface.addItem(
             routeKey="theme",
             icon=FluentIcon.CONSTRACT,
