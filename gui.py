@@ -47,6 +47,7 @@ from qfluentwidgets import (
     ToolTipFilter,
     toggleTheme,
     MessageBoxBase,
+    ComboBox,
 )
 
 # Import converter functions
@@ -185,6 +186,7 @@ class SingleFileSettings:
     last_output_dir: str = ""
     remove_backticks: bool = False
     auto_detect_dates: bool = False
+    delete_source: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -808,12 +810,14 @@ class SingleFileConversionThread(QThread):
         output_path: str | None,
         remove_backticks: bool,
         auto_detect_dates: bool,
+        delete_source: bool,
     ):
         super().__init__()
         self.input_path = input_path
         self.output_path = output_path
         self.remove_backticks = remove_backticks
         self.auto_detect_dates = auto_detect_dates
+        self.delete_source = delete_source
 
     def run(self):
         try:
@@ -824,10 +828,23 @@ class SingleFileConversionThread(QThread):
                 self.remove_backticks,
                 self.auto_detect_dates,
             )
-            self.progress.emit(100)  # Done
+            self.progress.emit(90)  # Conversion done
             if result:
+                # Delete source file if option enabled
+                if self.delete_source:
+                    try:
+                        os.remove(self.input_path)
+                    except Exception as e:
+                        # Conversion succeeded but deletion failed
+                        self.progress.emit(100)
+                        self.finished_signal.emit(
+                            True, f"{result} (failed to delete original: {e})"
+                        )
+                        return
+                self.progress.emit(100)  # Done
                 self.finished_signal.emit(True, result)
             else:
+                self.progress.emit(100)
                 self.finished_signal.emit(
                     False, "Conversion failed. Check console for details."
                 )
@@ -990,6 +1007,15 @@ class SingleFileCard(ElevatedCardWidget):
         )
         options_layout.addWidget(self.auto_detect_dates_switch)
         options_layout.addWidget(date_label)
+        options_layout.addSpacing(16)
+
+        # Delete original file
+        self.delete_source_switch = SwitchButton()
+        delete_label = BodyLabel("Delete original")
+        delete_label.installEventFilter(ToolTipFilter(delete_label, showDelay=500))
+        delete_label.setToolTip("⚠️ Delete original file after successful conversion")
+        options_layout.addWidget(self.delete_source_switch)
+        options_layout.addWidget(delete_label)
         options_layout.addStretch(1)
         self.main_layout.addLayout(options_layout)
 
@@ -1023,6 +1049,7 @@ class SingleFileCard(ElevatedCardWidget):
         # Connect switch changes to save settings
         self.remove_backticks_switch.checkedChanged.connect(self._save_settings)
         self.auto_detect_dates_switch.checkedChanged.connect(self._save_settings)
+        self.delete_source_switch.checkedChanged.connect(self._save_settings)
 
     def _load_settings(self):
         """Load saved settings from profile manager."""
@@ -1030,6 +1057,7 @@ class SingleFileCard(ElevatedCardWidget):
         self.output_path_edit.setText(settings.last_output_dir)
         self.remove_backticks_switch.setChecked(settings.remove_backticks)
         self.auto_detect_dates_switch.setChecked(settings.auto_detect_dates)
+        self.delete_source_switch.setChecked(settings.delete_source)
 
     def _save_settings(self):
         """Save current settings to profile manager."""
@@ -1038,6 +1066,7 @@ class SingleFileCard(ElevatedCardWidget):
             last_output_dir=self.output_path_edit.text(),
             remove_backticks=self.remove_backticks_switch.isChecked(),
             auto_detect_dates=self.auto_detect_dates_switch.isChecked(),
+            delete_source=self.delete_source_switch.isChecked(),
         )
         self.profile_manager.update_single_file_settings(settings)
 
@@ -1112,13 +1141,14 @@ class SingleFileCard(ElevatedCardWidget):
 
         remove_backticks = self.remove_backticks_switch.isChecked()
         auto_detect_dates = self.auto_detect_dates_switch.isChecked()
+        delete_source = self.delete_source_switch.isChecked()
 
         # Show progress UI
         self._set_converting_state(True)
 
         # Start conversion thread
         self.conversion_thread = SingleFileConversionThread(
-            input_path, output_path, remove_backticks, auto_detect_dates
+            input_path, output_path, remove_backticks, auto_detect_dates, delete_source
         )
         self.conversion_thread.progress.connect(self._on_conversion_progress)
         self.conversion_thread.finished_signal.connect(self._on_conversion_finished)
@@ -1729,6 +1759,8 @@ class SettingsPage(QWidget):
         # Settings Card
         settings_card = ElevatedCardWidget()
         settings_card.setBorderRadius(8)
+        # Disable hover effects
+        settings_card.setStyleSheet("ElevatedCardWidget:hover { border: none; }")
         card_layout = QVBoxLayout(settings_card)
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(16)
@@ -1769,8 +1801,49 @@ class SettingsPage(QWidget):
             card_layout.addWidget(note_label)
             self.auto_startup_switch.setEnabled(False)
 
-        card_layout.addStretch(1)
         layout.addWidget(settings_card)
+
+        # Appearance Card
+        appearance_card = ElevatedCardWidget()
+        appearance_card.setBorderRadius(8)
+        # Disable hover effects
+        appearance_card.setStyleSheet("ElevatedCardWidget:hover { border: none; }")
+        appearance_layout = QVBoxLayout(appearance_card)
+        appearance_layout.setContentsMargins(16, 16, 16, 16)
+        appearance_layout.setSpacing(16)
+
+        # Theme setting
+        theme_layout = QHBoxLayout()
+        theme_layout.setSpacing(12)
+
+        theme_info = QVBoxLayout()
+        theme_info.setSpacing(2)
+        theme_title = StrongBodyLabel("Theme")
+        theme_desc = CaptionLabel("Choose application color theme")
+        theme_desc.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+        theme_info.addWidget(theme_title)
+        theme_info.addWidget(theme_desc)
+        theme_layout.addLayout(theme_info, 1)
+
+        self.theme_combo = ComboBox()
+        self.theme_combo.addItems(["System", "Light", "Dark"])
+        self.theme_combo.setFixedWidth(120)
+        # Set current theme selection
+        from qfluentwidgets import qconfig
+
+        current_theme = qconfig.theme
+        if current_theme == Theme.AUTO:
+            self.theme_combo.setCurrentIndex(0)
+        elif current_theme == Theme.LIGHT:
+            self.theme_combo.setCurrentIndex(1)
+        else:
+            self.theme_combo.setCurrentIndex(2)
+        self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
+        theme_layout.addWidget(self.theme_combo)
+
+        appearance_layout.addLayout(theme_layout)
+
+        layout.addWidget(appearance_card)
         layout.addStretch(1)
 
     def _on_auto_startup_changed(self, checked: bool):
@@ -1796,6 +1869,11 @@ class SettingsPage(QWidget):
                 position=InfoBarPosition.TOP,
                 duration=3000,
             )
+
+    def _on_theme_changed(self, index: int):
+        """Handle theme dropdown change."""
+        themes = [Theme.AUTO, Theme.LIGHT, Theme.DARK]
+        setTheme(themes[index])
 
 
 class MainWindow(FluentWindow):
@@ -1842,15 +1920,6 @@ class MainWindow(FluentWindow):
             NavigationItemPosition.BOTTOM,
         )
 
-        self.navigationInterface.addItem(
-            routeKey="theme",
-            icon=FluentIcon.CONSTRACT,
-            text="Toggle Theme",
-            onClick=self.toggle_theme,
-            selectable=False,
-            position=NavigationItemPosition.BOTTOM,
-        )
-
         self.switchTo(self.home_page)
 
         # Enable Mica effect (Windows 11) for translucent background
@@ -1866,9 +1935,6 @@ class MainWindow(FluentWindow):
         desktop = QApplication.primaryScreen().availableGeometry()
         w, h = desktop.width(), desktop.height()
         self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
-
-    def toggle_theme(self):
-        toggleTheme(lazy=True)
 
     def closeEvent(self, event):
         """Stop all monitors before closing."""

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.7] - 2026-01-08
+
+### Added
+- "Delete original" option for single file conversion
+- Theme selection dropdown in Settings (System, Light, Dark)
+
+### Changed
+- Moved theme toggle from navigation bar to Settings page
+- Separated Settings page into distinct cards for better organization
+- Disabled hover effects on Settings cards for cleaner appearance
+
 ## [0.2.6] - 2026-01-08
 
 ### Added
