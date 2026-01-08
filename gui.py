@@ -1756,10 +1756,8 @@ class SettingsPage(QWidget):
         layout.addWidget(CaptionLabel("Configure global application settings."))
 
         # Settings Card
-        settings_card = ElevatedCardWidget()
+        settings_card = SimpleCardWidget()
         settings_card.setBorderRadius(8)
-        # Disable hover effects
-        settings_card.setStyleSheet("ElevatedCardWidget:hover { border: none; }")
         card_layout = QVBoxLayout(settings_card)
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(16)
@@ -1803,10 +1801,8 @@ class SettingsPage(QWidget):
         layout.addWidget(settings_card)
 
         # Appearance Card
-        appearance_card = ElevatedCardWidget()
+        appearance_card = SimpleCardWidget()
         appearance_card.setBorderRadius(8)
-        # Disable hover effects
-        appearance_card.setStyleSheet("ElevatedCardWidget:hover { border: none; }")
         appearance_layout = QVBoxLayout(appearance_card)
         appearance_layout.setContentsMargins(16, 16, 16, 16)
         appearance_layout.setSpacing(16)
@@ -1843,6 +1839,22 @@ class SettingsPage(QWidget):
         appearance_layout.addLayout(theme_layout)
 
         layout.addWidget(appearance_card)
+
+        # Credits Card
+        credits_card = SimpleCardWidget()
+        credits_card.setBorderRadius(8)
+        credits_layout = QVBoxLayout(credits_card)
+        credits_layout.setContentsMargins(16, 16, 16, 16)
+        credits_layout.setSpacing(8)
+
+        credits_title = StrongBodyLabel("About")
+        credits_layout.addWidget(credits_title)
+
+        copyright_label = CaptionLabel("Copyright 2026 - Faizal Kusmawan")
+        copyright_label.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+        credits_layout.addWidget(copyright_label)
+
+        layout.addWidget(credits_card)
         layout.addStretch(1)
 
     def _on_auto_startup_changed(self, checked: bool):

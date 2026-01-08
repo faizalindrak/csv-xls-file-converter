@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.8] - 2026-01-08
+
+### Added
+- Credits section in Settings page with copyright information
+
+### Fixed
+- Disabled bouncing hover animation on Settings page cards
+
 ## [0.2.7] - 2026-01-08
 
 ### Added
