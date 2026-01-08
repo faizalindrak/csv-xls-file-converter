@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.10] - 2026-01-08
+
+### Added
+- App Version card in Settings page showing current and latest version
+- "Check for Updates" button to check for new releases on GitHub
+- Clickable link to download updates from GitHub releases page
+- Background version checking using GitHub API
+
 ## [0.2.9] - 2026-01-08
 
 ### Added

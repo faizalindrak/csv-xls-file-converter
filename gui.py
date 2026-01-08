@@ -305,6 +305,40 @@ class LogSignal(QThread):
     message = Signal(str)
 
 
+# GitHub repository info for version checking
+GITHUB_REPO_OWNER = "faizalindrak"
+GITHUB_REPO_NAME = "csv-xls-file-converter"
+GITHUB_RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/latest"
+
+
+class VersionCheckThread(QThread):
+    """Thread to check for latest version on GitHub."""
+
+    result = Signal(bool, str, str)  # success, latest_version, release_url
+
+    def run(self):
+        try:
+            import urllib.request
+            import json as json_module
+
+            req = urllib.request.Request(
+                GITHUB_RELEASES_URL,
+                headers={
+                    "Accept": "application/vnd.github.v3+json",
+                    "User-Agent": "CSV-XLS-Converter",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json_module.loads(response.read().decode("utf-8"))
+                tag_name = data.get("tag_name", "")
+                html_url = data.get("html_url", "")
+                # Remove 'v' prefix if present (e.g., 'v0.2.9' -> '0.2.9')
+                version = tag_name.lstrip("v")
+                self.result.emit(True, version, html_url)
+        except Exception as e:
+            self.result.emit(False, str(e), "")
+
+
 class MonitorThread(QThread):
     """Thread for folder monitoring with optimizations for large folders"""
 
@@ -1739,6 +1773,148 @@ class MonitorPage(QWidget):
             self._stop_monitor(profile_id)
 
 
+class VersionCard(SimpleCardWidget):
+    """Card widget showing app version with update check."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setBorderRadius(8)
+        self.version_check_thread: Optional[VersionCheckThread] = None
+        self._latest_version: Optional[str] = None
+        self._release_url: Optional[str] = None
+
+        card_layout = QVBoxLayout(self)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(12)
+
+        # Header row with title and button
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(12)
+
+        # Left side: title and version info
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(4)
+
+        title = StrongBodyLabel("App Version")
+        info_layout.addWidget(title)
+
+        # Version row - current and latest on one line
+        version_row = QHBoxLayout()
+        version_row.setSpacing(8)
+
+        current_label = CaptionLabel("Current:")
+        current_label.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+        self.current_version_label = BodyLabel(__version__)
+
+        separator = CaptionLabel("•")
+        separator.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+
+        latest_label = CaptionLabel("Latest:")
+        latest_label.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+        self.latest_version_label = BodyLabel("—")
+
+        version_row.addWidget(current_label)
+        version_row.addWidget(self.current_version_label)
+        version_row.addWidget(separator)
+        version_row.addWidget(latest_label)
+        version_row.addWidget(self.latest_version_label)
+        version_row.addStretch(1)
+        info_layout.addLayout(version_row)
+
+        # Status row - shows update status and link on one line
+        status_row = QHBoxLayout()
+        status_row.setSpacing(8)
+
+        self.status_label = CaptionLabel("")
+        self.status_label.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+        status_row.addWidget(self.status_label)
+
+        # Update link (hidden by default, same line as status)
+        self.update_link = CaptionLabel("")
+        self.update_link.setTextColor(QColor(0, 120, 212), QColor(100, 180, 255))
+        self.update_link.setCursor(Qt.PointingHandCursor)
+        self.update_link.hide()
+        self.update_link.mousePressEvent = lambda e: self._open_release_page()
+        status_row.addWidget(self.update_link)
+        status_row.addStretch(1)
+
+        info_layout.addLayout(status_row)
+
+        header_layout.addLayout(info_layout, 1)
+
+        # Right side: check button (accent color)
+        self.check_btn = PrimaryPushButton(FluentIcon.SYNC, "Check for Updates")
+        self.check_btn.clicked.connect(self._check_for_updates)
+        header_layout.addWidget(self.check_btn)
+
+        card_layout.addLayout(header_layout)
+
+    def _check_for_updates(self):
+        """Start version check in background thread."""
+        if self.version_check_thread and self.version_check_thread.isRunning():
+            return
+
+        self.check_btn.setEnabled(False)
+        self.check_btn.setText("Checking...")
+        self.status_label.setText("")
+        self.latest_version_label.setText("...")
+
+        self.version_check_thread = VersionCheckThread()
+        self.version_check_thread.result.connect(self._on_version_check_result)
+        self.version_check_thread.start()
+
+    def _on_version_check_result(
+        self, success: bool, version_or_error: str, release_url: str
+    ):
+        """Handle version check result."""
+        self.check_btn.setEnabled(True)
+        self.check_btn.setText("Check for Updates")
+
+        if success:
+            self._latest_version = version_or_error
+            self._release_url = release_url
+            self.latest_version_label.setText(version_or_error)
+
+            # Compare versions
+            if self._is_newer_version(version_or_error, __version__):
+                self.status_label.setText("Update available!")
+                self.status_label.setTextColor(QColor(0, 164, 0), QColor(80, 200, 80))
+                # Show clickable link
+                self.update_link.setText("📥 Download from GitHub →")
+                self.update_link.show()
+            else:
+                self.status_label.setText("You're up to date ✓")
+                self.status_label.setTextColor(
+                    QColor(128, 128, 128), QColor(160, 160, 160)
+                )
+                self.update_link.hide()
+        else:
+            self.latest_version_label.setText("—")
+            self.status_label.setText("Failed to check")
+            self.status_label.setTextColor(QColor(200, 80, 80), QColor(200, 100, 100))
+            self.update_link.hide()
+
+    def _is_newer_version(self, latest: str, current: str) -> bool:
+        """Compare version strings (e.g., '0.2.10' > '0.2.9')."""
+        try:
+            latest_parts = [int(x) for x in latest.split(".")]
+            current_parts = [int(x) for x in current.split(".")]
+            # Pad with zeros if needed
+            max_len = max(len(latest_parts), len(current_parts))
+            latest_parts.extend([0] * (max_len - len(latest_parts)))
+            current_parts.extend([0] * (max_len - len(current_parts)))
+            return latest_parts > current_parts
+        except ValueError:
+            return False
+
+    def _open_release_page(self):
+        """Open the GitHub release page in browser."""
+        if self._release_url:
+            import webbrowser
+
+            webbrowser.open(self._release_url)
+
+
 class SettingsPage(QWidget):
     """Page for global application settings."""
 
@@ -1840,6 +2016,10 @@ class SettingsPage(QWidget):
         appearance_layout.addLayout(theme_layout)
 
         layout.addWidget(appearance_card)
+
+        # Version Card
+        self.version_card = VersionCard()
+        layout.addWidget(self.version_card)
 
         # Credits Card
         credits_card = SimpleCardWidget()
