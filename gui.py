@@ -45,7 +45,6 @@ from qfluentwidgets import (
     SmoothScrollArea,
     TransparentToolButton,
     ToolTipFilter,
-    toggleTheme,
     MessageBoxBase,
     ComboBox,
 )
