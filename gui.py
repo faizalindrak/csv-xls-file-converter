@@ -19,8 +19,9 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
     QMenu,
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QSharedMemory
 from PySide6.QtGui import QColor, QAction
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from qfluentwidgets import (
     FluentWindow,
@@ -2211,13 +2212,107 @@ class MainWindow(FluentWindow):
             )
 
 
+class SingleInstanceManager:
+    """Ensures only one instance of the application runs at a time."""
+
+    APP_KEY = "csv-xls-converter-single-instance"
+
+    def __init__(self):
+        self._shared_memory = QSharedMemory(self.APP_KEY)
+        self._local_server: Optional[QLocalServer] = None
+        self._is_primary = False
+
+    def try_start(self) -> bool:
+        """Try to become the primary instance.
+
+        Returns True if this is the primary instance, False if another is running.
+        """
+        # Try to attach to existing shared memory (another instance exists)
+        if self._shared_memory.attach():
+            self._shared_memory.detach()
+            return False
+
+        # Try to create shared memory (we are the primary instance)
+        if self._shared_memory.create(1):
+            self._is_primary = True
+            self._start_server()
+            return True
+
+        # Edge case: shared memory exists but we couldn't attach
+        # This can happen if previous instance crashed
+        # Try to clean up and create again
+        self._shared_memory.attach()
+        self._shared_memory.detach()
+        if self._shared_memory.create(1):
+            self._is_primary = True
+            self._start_server()
+            return True
+
+        return False
+
+    def _start_server(self):
+        """Start local server to listen for activation requests."""
+        # Remove any stale socket
+        QLocalServer.removeServer(self.APP_KEY)
+
+        self._local_server = QLocalServer()
+        self._local_server.newConnection.connect(self._on_new_connection)
+        self._local_server.listen(self.APP_KEY)
+
+    def _on_new_connection(self):
+        """Handle connection from another instance trying to start."""
+        if self._local_server:
+            socket = self._local_server.nextPendingConnection()
+            if socket:
+                socket.waitForReadyRead(1000)
+                socket.disconnectFromServer()
+                # Bring existing window to front
+                self._activate_window()
+
+    def _activate_window(self):
+        """Bring the main window to the foreground."""
+        app = QApplication.instance()
+        if app:
+            for widget in app.topLevelWidgets():
+                if isinstance(widget, MainWindow):
+                    widget.showNormal()
+                    widget.activateWindow()
+                    widget.raise_()
+                    break
+
+    def notify_existing_instance(self):
+        """Send activation signal to existing instance."""
+        socket = QLocalSocket()
+        socket.connectToServer(self.APP_KEY)
+        if socket.waitForConnected(1000):
+            socket.write(b"activate")
+            socket.waitForBytesWritten(1000)
+            socket.disconnectFromServer()
+
+    def cleanup(self):
+        """Clean up resources."""
+        if self._local_server:
+            self._local_server.close()
+        if self._is_primary:
+            self._shared_memory.detach()
+
+
 def main():
     app = QApplication(sys.argv)
+
+    # Single instance check
+    instance_manager = SingleInstanceManager()
+    if not instance_manager.try_start():
+        # Another instance is running, notify it and exit
+        instance_manager.notify_existing_instance()
+        sys.exit(0)
 
     window = MainWindow()
     window.show()
 
-    sys.exit(app.exec())
+    exit_code = app.exec()
+    instance_manager.cleanup()
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.11] - 2026-01-08
+
+### Added
+- Single instance enforcement - only one app instance can run at a time
+- When launching a second instance, the existing window is brought to front
+
+### Fixed
+- Prevented duplicate app instances running in background/system tray
+
 ## [0.3.10] - 2026-01-08
 
 ### Added
