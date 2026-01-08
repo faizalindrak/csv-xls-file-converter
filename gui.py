@@ -16,9 +16,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QFileDialog,
+    QSystemTrayIcon,
+    QMenu,
 )
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QAction
 
 from qfluentwidgets import (
     FluentWindow,
@@ -30,7 +32,6 @@ from qfluentwidgets import (
     BodyLabel,
     SubtitleLabel,
     CaptionLabel,
-    ElevatedCardWidget,
     SimpleCardWidget,
     LineEdit,
     TextEdit,
@@ -924,8 +925,8 @@ class DropArea(QWidget):
         return ext in [".csv", ".xls"]
 
 
-class SingleFileCard(ElevatedCardWidget):
-    """Card for single file conversion with elevated shadow effect"""
+class SingleFileCard(SimpleCardWidget):
+    """Card for single file conversion"""
 
     def __init__(self, profile_manager: ProfileManager, parent=None):
         super().__init__(parent)
@@ -1192,8 +1193,8 @@ class SingleFileCard(ElevatedCardWidget):
             )
 
 
-class FolderMonitorCard(ElevatedCardWidget):
-    """Card for folder monitoring with elevated shadow effect"""
+class FolderMonitorCard(SimpleCardWidget):
+    """Card for folder monitoring"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1893,6 +1894,12 @@ class MainWindow(FluentWindow):
         self.setWindowTitle(f"CSV/XLS to XLSX Converter v{__version__}")
         self.resize(850, 650)
 
+        # Flag to track if we're actually quitting
+        self._is_quitting = False
+
+        # System tray icon (initialized later if available)
+        self.tray_icon = None
+
         # Theme - Auto detect system theme
         setTheme(Theme.AUTO)
 
@@ -1947,10 +1954,81 @@ class MainWindow(FluentWindow):
         w, h = desktop.width(), desktop.height()
         self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
 
+        # Setup system tray
+        self._setup_system_tray()
+
+    def _setup_system_tray(self):
+        """Setup system tray icon and menu."""
+        # Check if system tray is available
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+
+        self.tray_icon = QSystemTrayIcon(self)
+
+        # Use app icon or fallback to a built-in icon
+        icon = self.windowIcon()
+        if icon.isNull():
+            # Use FluentIcon as fallback
+            icon = FluentIcon.SYNC.icon()
+        self.tray_icon.setIcon(icon)
+        self.tray_icon.setToolTip(f"CSV/XLS Converter v{__version__}")
+
+        # Create tray menu
+        tray_menu = QMenu()
+
+        # Show action
+        show_action = QAction("Show", self)
+        show_action.triggered.connect(self._show_window)
+        tray_menu.addAction(show_action)
+
+        tray_menu.addSeparator()
+
+        # Quit action
+        quit_action = QAction("Quit", self)
+        quit_action.triggered.connect(self._quit_app)
+        tray_menu.addAction(quit_action)
+
+        self.tray_icon.setContextMenu(tray_menu)
+
+        # Double-click to show window
+        self.tray_icon.activated.connect(self._on_tray_activated)
+
+        self.tray_icon.show()
+
+    def _on_tray_activated(self, reason):
+        """Handle tray icon activation."""
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self._show_window()
+
+    def _show_window(self):
+        """Show and activate the main window."""
+        self.showNormal()
+        self.activateWindow()
+        self.raise_()
+
+    def _quit_app(self):
+        """Actually quit the application."""
+        self._is_quitting = True
+        self.close()
+
     def closeEvent(self, event):
-        """Stop all monitors before closing."""
-        self.monitor_page.stop_all_monitors()
-        super().closeEvent(event)
+        """Minimize to tray instead of closing, unless quitting or tray unavailable."""
+        if self._is_quitting or self.tray_icon is None:
+            # Actually close - stop monitors and quit
+            self.monitor_page.stop_all_monitors()
+            if self.tray_icon is not None:
+                self.tray_icon.hide()
+            super().closeEvent(event)
+        else:
+            # Minimize to tray
+            event.ignore()
+            self.hide()
+            self.tray_icon.showMessage(
+                "CSV/XLS Converter",
+                "Application minimized to tray. Folder monitoring continues in background.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000,
+            )
 
 
 def main():

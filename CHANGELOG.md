@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.9] - 2026-01-08
+
+### Added
+- System tray support - app minimizes to tray instead of closing
+- Tray context menu with Show and Quit options
+- Double-click tray icon to restore window
+- Notification balloon when minimized to tray
+
+### Changed
+- All cards now use SimpleCardWidget (no bouncing hover animation)
+
 ## [0.2.8] - 2026-01-08
 
 ### Added
