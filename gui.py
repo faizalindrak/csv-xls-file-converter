@@ -796,12 +796,125 @@ class ProfileCard(SimpleCardWidget):
             )
 
 
+class SingleFileConversionThread(QThread):
+    """Thread for single file conversion with progress reporting."""
+
+    progress = Signal(int)  # 0-100 percentage
+    finished_signal = Signal(bool, str)  # success, result_path_or_error
+
+    def __init__(
+        self,
+        input_path: str,
+        output_path: str | None,
+        remove_backticks: bool,
+        auto_detect_dates: bool,
+    ):
+        super().__init__()
+        self.input_path = input_path
+        self.output_path = output_path
+        self.remove_backticks = remove_backticks
+        self.auto_detect_dates = auto_detect_dates
+
+    def run(self):
+        try:
+            self.progress.emit(10)  # Started
+            result = convert_to_xlsx(
+                self.input_path,
+                self.output_path,
+                self.remove_backticks,
+                self.auto_detect_dates,
+            )
+            self.progress.emit(100)  # Done
+            if result:
+                self.finished_signal.emit(True, result)
+            else:
+                self.finished_signal.emit(
+                    False, "Conversion failed. Check console for details."
+                )
+        except Exception as e:
+            self.progress.emit(100)
+            self.finished_signal.emit(False, str(e))
+
+
+class DropArea(QWidget):
+    """A drop zone widget for drag-and-drop file input."""
+
+    file_dropped = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.setMinimumHeight(100)
+        self._is_dragging = False
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignCenter)
+
+        self.icon = IconWidget(FluentIcon.DOWNLOAD)
+        self.icon.setFixedSize(32, 32)
+
+        self.label = BodyLabel("Drag & drop CSV or XLS file here")
+        self.sublabel = CaptionLabel("or use Browse button below")
+        self.sublabel.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+
+        layout.addWidget(self.icon, alignment=Qt.AlignCenter)
+        layout.addWidget(self.label, alignment=Qt.AlignCenter)
+        layout.addWidget(self.sublabel, alignment=Qt.AlignCenter)
+
+        self._update_style()
+
+    def _update_style(self):
+        border_color = "#0078d4" if self._is_dragging else "#d0d0d0"
+        bg_color = "rgba(0, 120, 212, 0.05)" if self._is_dragging else "transparent"
+        self.setStyleSheet(
+            f"""
+            DropArea {{
+                border: 2px dashed {border_color};
+                border-radius: 8px;
+                background: {bg_color};
+            }}
+            """
+        )
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and self._is_valid_file(urls[0].toLocalFile()):
+                event.acceptProposedAction()
+                self._is_dragging = True
+                self._update_style()
+                return
+        event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self._is_dragging = False
+        self._update_style()
+
+    def dropEvent(self, event):
+        self._is_dragging = False
+        self._update_style()
+        urls = event.mimeData().urls()
+        if urls:
+            file_path = urls[0].toLocalFile()
+            if self._is_valid_file(file_path):
+                self.file_dropped.emit(file_path)
+                event.acceptProposedAction()
+                return
+        event.ignore()
+
+    def _is_valid_file(self, path: str) -> bool:
+        ext = os.path.splitext(path)[1].lower()
+        return ext in [".csv", ".xls"]
+
+
 class SingleFileCard(ElevatedCardWidget):
     """Card for single file conversion with elevated shadow effect"""
 
     def __init__(self, profile_manager: ProfileManager, parent=None):
         super().__init__(parent)
         self.profile_manager = profile_manager
+        self.conversion_thread: SingleFileConversionThread | None = None
         self.setBorderRadius(8)
 
         self.main_layout = QVBoxLayout(self)
@@ -818,6 +931,11 @@ class SingleFileCard(ElevatedCardWidget):
         header_layout.addWidget(title)
         header_layout.addStretch(1)
         self.main_layout.addLayout(header_layout)
+
+        # Drop Area for drag-and-drop
+        self.drop_area = DropArea()
+        self.drop_area.file_dropped.connect(self._on_file_dropped)
+        self.main_layout.addWidget(self.drop_area)
 
         # Input File Section
         input_label = StrongBodyLabel("Input File")
@@ -876,6 +994,22 @@ class SingleFileCard(ElevatedCardWidget):
         self.main_layout.addLayout(options_layout)
 
         self.main_layout.addStretch(1)
+
+        # Progress Section (hidden by default)
+        self.progress_layout = QHBoxLayout()
+        self.progress_layout.setSpacing(8)
+        self.progress_ring = ProgressRing()
+        self.progress_ring.setFixedSize(24, 24)
+        self.progress_ring.setStrokeWidth(3)
+        self.progress_label = CaptionLabel("Converting...")
+        self.progress_layout.addWidget(self.progress_ring)
+        self.progress_layout.addWidget(self.progress_label)
+        self.progress_layout.addStretch(1)
+
+        self.progress_widget = QWidget()
+        self.progress_widget.setLayout(self.progress_layout)
+        self.progress_widget.hide()
+        self.main_layout.addWidget(self.progress_widget)
 
         # Action Button
         self.convert_btn = PrimaryPushButton(FluentIcon.SYNC, "Convert to XLSX")
@@ -942,6 +1076,18 @@ class SingleFileCard(ElevatedCardWidget):
             self.output_path_edit.setText(folder_path)
             self._save_settings()
 
+    def _on_file_dropped(self, file_path: str):
+        """Handle file dropped onto the drop area."""
+        self.input_path_edit.setText(file_path)
+        self._save_settings()
+        InfoBar.success(
+            title="File Selected",
+            content=os.path.basename(file_path),
+            parent=self.window(),
+            position=InfoBarPosition.TOP,
+            duration=2000,
+        )
+
     def start_conversion(self):
         input_path = self.input_path_edit.text()
         if not input_path or not os.path.exists(input_path):
@@ -954,6 +1100,10 @@ class SingleFileCard(ElevatedCardWidget):
             )
             return
 
+        # Prevent double-click during conversion
+        if self.conversion_thread and self.conversion_thread.isRunning():
+            return
+
         output_folder = self.output_path_edit.text()
         output_path = None
         if output_folder:
@@ -963,29 +1113,51 @@ class SingleFileCard(ElevatedCardWidget):
         remove_backticks = self.remove_backticks_switch.isChecked()
         auto_detect_dates = self.auto_detect_dates_switch.isChecked()
 
-        try:
-            result = convert_to_xlsx(
-                input_path, output_path, remove_backticks, auto_detect_dates
+        # Show progress UI
+        self._set_converting_state(True)
+
+        # Start conversion thread
+        self.conversion_thread = SingleFileConversionThread(
+            input_path, output_path, remove_backticks, auto_detect_dates
+        )
+        self.conversion_thread.progress.connect(self._on_conversion_progress)
+        self.conversion_thread.finished_signal.connect(self._on_conversion_finished)
+        self.conversion_thread.start()
+
+    def _set_converting_state(self, is_converting: bool):
+        """Toggle UI state during conversion."""
+        self.convert_btn.setEnabled(not is_converting)
+        self.browse_input_btn.setEnabled(not is_converting)
+        self.browse_output_btn.setEnabled(not is_converting)
+        self.drop_area.setEnabled(not is_converting)
+        self.progress_widget.setVisible(is_converting)
+
+        if is_converting:
+            self.convert_btn.setText("Converting...")
+            self.progress_label.setText("Converting...")
+        else:
+            self.convert_btn.setText("Convert to XLSX")
+
+    def _on_conversion_progress(self, percent: int):
+        """Handle progress updates from conversion thread."""
+        self.progress_label.setText(f"Converting... {percent}%")
+
+    def _on_conversion_finished(self, success: bool, result: str):
+        """Handle conversion completion."""
+        self._set_converting_state(False)
+
+        if success:
+            InfoBar.success(
+                title="Success",
+                content=f"File converted to: {result}",
+                parent=self.window(),
+                position=InfoBarPosition.TOP,
+                duration=5000,
             )
-            if result:
-                InfoBar.success(
-                    title="Success",
-                    content=f"File converted to: {result}",
-                    parent=self.window(),
-                    position=InfoBarPosition.TOP,
-                    duration=5000,
-                )
-            else:
-                InfoBar.error(
-                    title="Conversion Failed",
-                    content="Check console logs for details.",
-                    parent=self.window(),
-                    position=InfoBarPosition.TOP,
-                )
-        except Exception as e:
+        else:
             InfoBar.error(
-                title="Error",
-                content=str(e),
+                title="Conversion Failed",
+                content=result,
                 parent=self.window(),
                 position=InfoBarPosition.TOP,
             )

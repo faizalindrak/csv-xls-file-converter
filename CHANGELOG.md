@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.6] - 2026-01-08
+
+### Added
+- Drag-and-drop support in single file conversion mode
+- Visual drop zone with hover feedback for file selection
+- Progress indicator during single file conversion
+- Background thread for non-blocking file conversion
+
+### Changed
+- Single file conversion now runs in background thread, keeping UI responsive
+- Convert button shows "Converting..." state during operation
+- UI elements disabled during conversion to prevent double-clicks
+
 ## [0.2.5] - 2026-01-07
 
 ### Added
