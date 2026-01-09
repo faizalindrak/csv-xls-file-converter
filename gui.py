@@ -19,8 +19,17 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
     QMenu,
 )
-from PySide6.QtCore import Qt, QThread, Signal, QSharedMemory, QObject, QTimer
-from PySide6.QtGui import QColor, QAction, QFont, QIcon, QPixmap, QPainter
+from PySide6.QtCore import Qt, QThread, Signal, QSharedMemory, QObject, QTimer, QUrl
+from PySide6.QtGui import (
+    QColor,
+    QAction,
+    QFont,
+    QIcon,
+    QPixmap,
+    QPainter,
+    QDesktopServices,
+)
+
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from qfluentwidgets import (
@@ -963,22 +972,22 @@ class SingleFileConversionThread(QThread):
         self.remove_backticks = remove_backticks
         self.auto_detect_dates = auto_detect_dates
         self.delete_source = delete_source
-        self._actual_output_path = output_path  # Will be set during run
+        self._actual_output_path = self._resolve_output_path()
+
+    def _resolve_output_path(self) -> str:
+        """Resolve output path for history entries."""
+        if self.output_path:
+            return self.output_path
+
+        base_name = os.path.splitext(os.path.basename(self.input_path))[0] + ".xlsx"
+        return os.path.join(os.path.dirname(self.input_path), base_name)
 
     def run(self):
         try:
             self.progress.emit(10)  # Started
 
             # Determine actual output path for history
-            if self.output_path:
-                self._actual_output_path = self.output_path
-            else:
-                base_name = (
-                    os.path.splitext(os.path.basename(self.input_path))[0] + ".xlsx"
-                )
-                self._actual_output_path = os.path.join(
-                    os.path.dirname(self.input_path), base_name
-                )
+            self._actual_output_path = self._resolve_output_path()
 
             self.conversion_started.emit(self.input_path, self._actual_output_path)
 
@@ -2123,6 +2132,7 @@ class HistoryItemWidget(QWidget):
         self.setCursor(
             Qt.PointingHandCursor if item.status == "success" else Qt.ArrowCursor
         )
+        self._base_style = self.styleSheet()
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 6)
@@ -2195,11 +2205,15 @@ class HistoryItemWidget(QWidget):
 
     def enterEvent(self, event):
         if self.item.status == "success":
-            self.setStyleSheet("background-color: rgba(0, 0, 0, 0.05);")
+            self._base_style = self.styleSheet()
+            self.setStyleSheet(
+                "background-color: rgba(0, 0, 0, 0.05);" + self._base_style
+            )
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        self.setStyleSheet("")
+        if self.item.status == "success":
+            self.setStyleSheet(self._base_style)
         super().leaveEvent(event)
 
 
@@ -2317,7 +2331,10 @@ class TrayHistoryPanel(QWidget):
     def _open_file(self, file_path: str):
         """Open the converted file."""
         if os.path.exists(file_path):
-            os.startfile(file_path)
+            if sys.platform == "win32":
+                os.startfile(file_path)
+            else:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
         self.hide()
 
     def _on_show_clicked(self):

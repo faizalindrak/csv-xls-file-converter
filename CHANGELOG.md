@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.14] - 2026-01-09
+
+### Fixed
+- Ensure history output path is resolved consistently
+- Open converted files from tray history on non-Windows platforms
+- Preserve history item hover styling without clobbering theme styles
+
 ## [0.4.13] - 2026-01-09
 
 ### Added
