@@ -41,6 +41,11 @@ WizardStyle=modern
 ; SetupIconFile=assets\icon.ico  ; Uncomment when icon.ico is available
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
+; Close running applications before install/update
+CloseApplications=force
+CloseApplicationsFilter=*.exe
+RestartApplications=yes
+
 ; Privileges (install for current user by default, no admin required)
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
@@ -78,5 +83,81 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Fil
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-// Custom code to read version from _version.py if needed in future
-// For now, version is hardcoded in #define above
+// Check if application is running and prompt user to close it
+function IsAppRunning(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  // Use tasklist to check if the process is running
+  Exec('cmd.exe', '/c tasklist /FI "IMAGENAME eq {#MyAppExeName}" 2>NUL | find /I "{#MyAppExeName}" >NUL', 
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := (ResultCode = 0);
+end;
+
+function InitializeSetup(): Boolean;
+var
+  RetryCount: Integer;
+  ResultCode: Integer;
+begin
+  Result := True;
+  RetryCount := 0;
+  
+  while IsAppRunning() and (RetryCount < 3) do
+  begin
+    if MsgBox('{#MyAppName} is currently running.' + #13#10 + #13#10 +
+              'Please close the application before continuing.' + #13#10 + #13#10 +
+              'Click OK after closing the application, or Cancel to abort installation.',
+              mbError, MB_OKCANCEL) = IDCANCEL then
+    begin
+      Result := False;
+      Exit;
+    end;
+    RetryCount := RetryCount + 1;
+    Sleep(500);
+  end;
+  
+  // If still running after 3 retries, offer to force close
+  if IsAppRunning() then
+  begin
+    if MsgBox('{#MyAppName} is still running.' + #13#10 + #13#10 +
+              'Would you like to force close it? (Unsaved data may be lost)' + #13#10 + #13#10 +
+              'Click Yes to force close, or No to abort installation.',
+              mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      Exec('taskkill.exe', '/F /IM "{#MyAppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      Sleep(1000);  // Wait for process to terminate
+      Result := not IsAppRunning();
+      if not Result then
+        MsgBox('Failed to close {#MyAppName}. Please close it manually and try again.', mbError, MB_OK);
+    end
+    else
+      Result := False;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+  NeedsRestart := False;
+  
+  // Final check before installation begins
+  if IsAppRunning() then
+  begin
+    // Try to gracefully close the application
+    Exec('taskkill.exe', '/IM "{#MyAppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(2000);  // Wait for graceful shutdown
+    
+    // If still running, force close
+    if IsAppRunning() then
+    begin
+      Exec('taskkill.exe', '/F /IM "{#MyAppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      Sleep(1000);
+    end;
+    
+    // Final check
+    if IsAppRunning() then
+      Result := '{#MyAppName} could not be closed. Please close it manually and run setup again.';
+  end;
+end;

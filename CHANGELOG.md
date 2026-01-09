@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.17] - 2026-01-09
+
+### Fixed
+- Harden installer to detect and close running app before updating
+- Add force-close option when app cannot be closed gracefully
+- Prevent "not responding" state during updates with running app
+
 ## [0.4.16] - 2026-01-09
 
 ### Fixed
