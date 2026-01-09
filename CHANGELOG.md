@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.13] - 2026-01-09
+
+### Added
+- System tray history panel showing last 20 conversions
+- Single-click tray icon to view recent conversion history
+- Click converted files in history panel to open them directly
+- Animated (spinning) tray icon during active conversions
+- "Open App" and "Quit" buttons in history panel footer
+- Dark/light theme support for history panel
+
+### Changed
+- Double-click tray icon now opens main window (previously single-click)
+- Right-click menu still available with Show/Quit options
+
 ## [0.3.12] - 2026-01-09
 
 ### Added
