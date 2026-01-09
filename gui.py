@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QMenu,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QSharedMemory, QObject, QTimer
-from PySide6.QtGui import QColor, QAction, QFont, QIcon, QPixmap, QPainter, QTransform
+from PySide6.QtGui import QColor, QAction, QFont, QIcon, QPixmap, QPainter
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from qfluentwidgets import (
