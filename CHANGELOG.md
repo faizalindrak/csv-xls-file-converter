@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.15] - 2026-01-09
+
+### Fixed
+- Preserve leading zeros in CSV values when converting to XLSX
+
 ## [0.4.14] - 2026-01-09
 
 ### Fixed

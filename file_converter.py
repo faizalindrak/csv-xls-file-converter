@@ -195,7 +195,7 @@ def sanitize_for_xml(value):
 def clean_numeric(s):
     """
     Attempt to convert string to float, handling various formats.
-    Returns original string if conversion fails.
+    Returns original string if conversion fails or if value has leading zeros.
     """
     if not isinstance(s, str):
         return s
@@ -205,6 +205,11 @@ def clean_numeric(s):
 
     # If it starts with a backtick, it's text, so don't clean it.
     if s.startswith("`"):
+        return s
+
+    # Preserve strings with leading zeros (e.g., "000001", "007")
+    # These are likely IDs, codes, or formatted numbers that should stay as text
+    if len(s) > 1 and s[0] == "0" and s[1].isdigit():
         return s
 
     # Try to convert to float directly
