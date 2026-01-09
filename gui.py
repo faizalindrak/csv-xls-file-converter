@@ -19,8 +19,8 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
     QMenu,
 )
-from PySide6.QtCore import Qt, QThread, Signal, QSharedMemory
-from PySide6.QtGui import QColor, QAction, QFont
+from PySide6.QtCore import Qt, QThread, Signal, QSharedMemory, QObject, QTimer
+from PySide6.QtGui import QColor, QAction, QFont, QIcon, QPixmap, QPainter, QTransform
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from qfluentwidgets import (
@@ -166,6 +166,24 @@ def is_auto_startup_enabled() -> bool:
 # Data Models
 # ============================================================================
 @dataclass
+class ConversionHistoryItem:
+    """Record of a single file conversion."""
+
+    source_path: str
+    output_path: str
+    status: str  # "processing", "success", "failed", "skipped"
+    timestamp: float = field(default_factory=time.time)
+    error_message: str = ""
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ConversionHistoryItem":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
 class GlobalSettings:
     """Global application settings (persisted)."""
 
@@ -216,6 +234,85 @@ class MonitorProfile:
     @classmethod
     def from_dict(cls, data: dict) -> "MonitorProfile":
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+class ConversionHistoryManager(QObject):
+    """Manages conversion history with a maximum of 20 items."""
+
+    # Signal emitted when history changes
+    history_changed = Signal()
+
+    MAX_ITEMS = 20
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._items: List[ConversionHistoryItem] = []
+
+    def add(self, item: ConversionHistoryItem):
+        """Add a conversion record to history."""
+        # Check if we're updating an existing "processing" item
+        for i, existing in enumerate(self._items):
+            if (
+                existing.source_path == item.source_path
+                and existing.status == "processing"
+            ):
+                self._items[i] = item
+                self.history_changed.emit()
+                return
+
+        # Add new item at the beginning
+        self._items.insert(0, item)
+
+        # Trim to max size
+        if len(self._items) > self.MAX_ITEMS:
+            self._items = self._items[: self.MAX_ITEMS]
+
+        self.history_changed.emit()
+
+    def add_processing(self, source_path: str, output_path: str):
+        """Add a file that is currently being processed."""
+        self.add(
+            ConversionHistoryItem(
+                source_path=source_path,
+                output_path=output_path,
+                status="processing",
+            )
+        )
+
+    def mark_success(self, source_path: str, output_path: str):
+        """Mark a processing item as successfully converted."""
+        self.add(
+            ConversionHistoryItem(
+                source_path=source_path,
+                output_path=output_path,
+                status="success",
+            )
+        )
+
+    def mark_failed(self, source_path: str, output_path: str, error: str = ""):
+        """Mark a processing item as failed."""
+        self.add(
+            ConversionHistoryItem(
+                source_path=source_path,
+                output_path=output_path,
+                status="failed",
+                error_message=error,
+            )
+        )
+
+    def mark_skipped(self, source_path: str, output_path: str):
+        """Mark a file as skipped (already exists)."""
+        self.add(
+            ConversionHistoryItem(
+                source_path=source_path,
+                output_path=output_path,
+                status="skipped",
+            )
+        )
+
+    def get_all(self) -> List[ConversionHistoryItem]:
+        """Get all history items."""
+        return self._items.copy()
 
 
 class ProfileManager:
@@ -349,6 +446,9 @@ class MonitorThread(QThread):
     stats_signal = Signal(
         int, int, int, int, int
     )  # (discovered, converted, skipped, current_batch, total_batches)
+    # History signals: source_path, output_path, status, error_message
+    conversion_started = Signal(str, str)  # source, output
+    conversion_finished = Signal(str, str, str, str)  # source, output, status, error
 
     def __init__(
         self,
@@ -595,9 +695,11 @@ class MonitorThread(QThread):
             self._skipped_count += 1
             self._emit_stats()
             self.log_signal.emit(f"Skipped (already exists): {base_name}")
+            self.conversion_finished.emit(source_path, output_path, "skipped", "")
             return
 
         self.log_signal.emit(f"Converting: {os.path.basename(source_path)}")
+        self.conversion_started.emit(source_path, output_path)
 
         try:
             result = convert_to_xlsx(
@@ -608,6 +710,7 @@ class MonitorThread(QThread):
                 self._converted_count += 1
                 self._emit_stats()
                 self.log_signal.emit(f"Success: {os.path.basename(output_path)}")
+                self.conversion_finished.emit(source_path, output_path, "success", "")
                 if self.delete_source:
                     try:
                         os.remove(source_path)
@@ -618,10 +721,14 @@ class MonitorThread(QThread):
                 self.log_signal.emit(
                     f"Failed to convert: {os.path.basename(source_path)}"
                 )
+                self.conversion_finished.emit(
+                    source_path, output_path, "failed", "Conversion returned None"
+                )
         except Exception as e:
             self.log_signal.emit(
                 f"Error converting {os.path.basename(source_path)}: {e}"
             )
+            self.conversion_finished.emit(source_path, output_path, "failed", str(e))
 
 
 # ============================================================================
@@ -838,6 +945,9 @@ class SingleFileConversionThread(QThread):
 
     progress = Signal(int)  # 0-100 percentage
     finished_signal = Signal(bool, str)  # success, result_path_or_error
+    # History signals
+    conversion_started = Signal(str, str)  # source, output
+    conversion_finished = Signal(str, str, str, str)  # source, output, status, error
 
     def __init__(
         self,
@@ -853,10 +963,25 @@ class SingleFileConversionThread(QThread):
         self.remove_backticks = remove_backticks
         self.auto_detect_dates = auto_detect_dates
         self.delete_source = delete_source
+        self._actual_output_path = output_path  # Will be set during run
 
     def run(self):
         try:
             self.progress.emit(10)  # Started
+
+            # Determine actual output path for history
+            if self.output_path:
+                self._actual_output_path = self.output_path
+            else:
+                base_name = (
+                    os.path.splitext(os.path.basename(self.input_path))[0] + ".xlsx"
+                )
+                self._actual_output_path = os.path.join(
+                    os.path.dirname(self.input_path), base_name
+                )
+
+            self.conversion_started.emit(self.input_path, self._actual_output_path)
+
             result = convert_to_xlsx(
                 self.input_path,
                 self.output_path,
@@ -875,17 +1000,26 @@ class SingleFileConversionThread(QThread):
                         self.finished_signal.emit(
                             True, f"{result} (failed to delete original: {e})"
                         )
+                        self.conversion_finished.emit(
+                            self.input_path, result, "success", ""
+                        )
                         return
                 self.progress.emit(100)  # Done
                 self.finished_signal.emit(True, result)
+                self.conversion_finished.emit(self.input_path, result, "success", "")
             else:
                 self.progress.emit(100)
-                self.finished_signal.emit(
-                    False, "Conversion failed. Check console for details."
+                error_msg = "Conversion failed. Check console for details."
+                self.finished_signal.emit(False, error_msg)
+                self.conversion_finished.emit(
+                    self.input_path, self._actual_output_path, "failed", error_msg
                 )
         except Exception as e:
             self.progress.emit(100)
             self.finished_signal.emit(False, str(e))
+            self.conversion_finished.emit(
+                self.input_path, self._actual_output_path, "failed", str(e)
+            )
 
 
 class DropArea(QWidget):
@@ -963,9 +1097,15 @@ class DropArea(QWidget):
 class SingleFileCard(SimpleCardWidget):
     """Card for single file conversion"""
 
-    def __init__(self, profile_manager: ProfileManager, parent=None):
+    def __init__(
+        self,
+        profile_manager: ProfileManager,
+        history_manager: ConversionHistoryManager = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.profile_manager = profile_manager
+        self.history_manager = history_manager
         self.conversion_thread: SingleFileConversionThread | None = None
         self.setBorderRadius(8)
 
@@ -1187,7 +1327,30 @@ class SingleFileCard(SimpleCardWidget):
         )
         self.conversion_thread.progress.connect(self._on_conversion_progress)
         self.conversion_thread.finished_signal.connect(self._on_conversion_finished)
+
+        # Wire up history tracking
+        if self.history_manager:
+            self.conversion_thread.conversion_started.connect(self._on_history_started)
+            self.conversion_thread.conversion_finished.connect(
+                self._on_history_finished
+            )
+
         self.conversion_thread.start()
+
+    def _on_history_started(self, source: str, output: str):
+        """Handle conversion started for history."""
+        if self.history_manager:
+            self.history_manager.add_processing(source, output)
+
+    def _on_history_finished(self, source: str, output: str, status: str, error: str):
+        """Handle conversion finished for history."""
+        if self.history_manager:
+            if status == "success":
+                self.history_manager.mark_success(source, output)
+            elif status == "failed":
+                self.history_manager.mark_failed(source, output, error)
+            elif status == "skipped":
+                self.history_manager.mark_skipped(source, output)
 
     def _set_converting_state(self, is_converting: bool):
         """Toggle UI state during conversion."""
@@ -1499,9 +1662,15 @@ class FolderMonitorCard(SimpleCardWidget):
 
 
 class HomePage(QWidget):
-    def __init__(self, profile_manager: ProfileManager, parent=None):
+    def __init__(
+        self,
+        profile_manager: ProfileManager,
+        history_manager: ConversionHistoryManager = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.profile_manager = profile_manager
+        self.history_manager = history_manager
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(8)
@@ -1515,7 +1684,7 @@ class HomePage(QWidget):
         )
 
         # Card
-        self.card = SingleFileCard(profile_manager)
+        self.card = SingleFileCard(profile_manager, history_manager)
         layout.addWidget(self.card)
         layout.addStretch(1)
 
@@ -1523,9 +1692,15 @@ class HomePage(QWidget):
 class MonitorPage(QWidget):
     """Page for managing multiple monitor profiles."""
 
-    def __init__(self, profile_manager: ProfileManager, parent=None):
+    def __init__(
+        self,
+        profile_manager: ProfileManager,
+        history_manager: ConversionHistoryManager = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.profile_manager = profile_manager
+        self.history_manager = history_manager
         self.profile_cards: Dict[str, ProfileCard] = {}
         self.monitor_threads: Dict[str, MonitorThread] = {}
         self._is_shutting_down = (
@@ -1720,6 +1895,11 @@ class MonitorPage(QWidget):
             lambda d, c, s, cb, tb: self._on_monitor_stats(profile.id, c, s)
         )
 
+        # Wire up history tracking
+        if self.history_manager:
+            thread.conversion_started.connect(self._on_history_started)
+            thread.conversion_finished.connect(self._on_history_finished)
+
         self.monitor_threads[profile.id] = thread
         thread.start()
 
@@ -1727,6 +1907,21 @@ class MonitorPage(QWidget):
             self.profile_cards[profile.id].set_running(True)
 
         self._log(f"Started monitoring: {profile.name}")
+
+    def _on_history_started(self, source: str, output: str):
+        """Handle conversion started for history."""
+        if self.history_manager:
+            self.history_manager.add_processing(source, output)
+
+    def _on_history_finished(self, source: str, output: str, status: str, error: str):
+        """Handle conversion finished for history."""
+        if self.history_manager:
+            if status == "success":
+                self.history_manager.mark_success(source, output)
+            elif status == "failed":
+                self.history_manager.mark_failed(source, output, error)
+            elif status == "skipped":
+                self.history_manager.mark_skipped(source, output)
 
     def _stop_monitor(self, profile_id: str):
         """Stop monitoring for a profile."""
@@ -1916,6 +2111,257 @@ class VersionCard(SimpleCardWidget):
             webbrowser.open(self._release_url)
 
 
+class HistoryItemWidget(QWidget):
+    """Widget representing a single conversion history item."""
+
+    clicked = Signal(str)  # Emits output_path when clicked
+
+    def __init__(self, item: ConversionHistoryItem, parent=None):
+        super().__init__(parent)
+        self.item = item
+        self.setFixedHeight(48)
+        self.setCursor(
+            Qt.PointingHandCursor if item.status == "success" else Qt.ArrowCursor
+        )
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setSpacing(8)
+
+        # Status icon
+        if item.status == "processing":
+            self.status_icon = ProgressRing()
+            self.status_icon.setFixedSize(16, 16)
+            self.status_icon.setStrokeWidth(2)
+        else:
+            icon_map = {
+                "success": FluentIcon.ACCEPT,
+                "failed": FluentIcon.CLOSE,
+                "skipped": FluentIcon.REMOVE,
+            }
+            self.status_icon = IconWidget(icon_map.get(item.status, FluentIcon.INFO))
+            self.status_icon.setFixedSize(16, 16)
+        layout.addWidget(self.status_icon)
+
+        # File info
+        info_layout = QVBoxLayout()
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setSpacing(0)
+
+        filename = os.path.basename(item.output_path or item.source_path)
+        self.name_label = BodyLabel(filename)
+        self.name_label.setFont(QFont("Segoe UI", 9))
+
+        status_text = {
+            "processing": "Converting...",
+            "success": "Converted",
+            "failed": f"Failed: {item.error_message}"
+            if item.error_message
+            else "Failed",
+            "skipped": "Skipped (exists)",
+        }.get(item.status, item.status)
+
+        self.status_label = CaptionLabel(status_text)
+        self.status_label.setTextColor(
+            self._get_status_color(item.status, light=True),
+            self._get_status_color(item.status, light=False),
+        )
+
+        info_layout.addWidget(self.name_label)
+        info_layout.addWidget(self.status_label)
+        layout.addLayout(info_layout, 1)
+
+        # Time
+        time_str = time.strftime("%H:%M", time.localtime(item.timestamp))
+        self.time_label = CaptionLabel(time_str)
+        self.time_label.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+        layout.addWidget(self.time_label)
+
+    def _get_status_color(self, status: str, light: bool) -> QColor:
+        colors = {
+            "processing": (QColor(0, 120, 212), QColor(100, 180, 255)),
+            "success": (QColor(0, 164, 0), QColor(80, 200, 80)),
+            "failed": (QColor(200, 50, 50), QColor(220, 100, 100)),
+            "skipped": (QColor(128, 128, 128), QColor(160, 160, 160)),
+        }
+        return colors.get(status, (QColor(128, 128, 128), QColor(160, 160, 160)))[
+            0 if light else 1
+        ]
+
+    def mousePressEvent(self, event):
+        if self.item.status == "success" and self.item.output_path:
+            self.clicked.emit(self.item.output_path)
+        super().mousePressEvent(event)
+
+    def enterEvent(self, event):
+        if self.item.status == "success":
+            self.setStyleSheet("background-color: rgba(0, 0, 0, 0.05);")
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setStyleSheet("")
+        super().leaveEvent(event)
+
+
+class TrayHistoryPanel(QWidget):
+    """Popup panel showing recent conversion history."""
+
+    quit_requested = Signal()
+    show_window_requested = Signal()
+
+    def __init__(self, history_manager: ConversionHistoryManager, parent=None):
+        super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
+        self.history_manager = history_manager
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(320, 420)
+
+        # Main container with rounded corners
+        self.container = QWidget(self)
+        self.container.setObjectName("trayPanelContainer")
+
+        container_layout = QVBoxLayout(self.container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+
+        # Header
+        header = QWidget()
+        header.setFixedHeight(44)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(12, 8, 12, 8)
+
+        title = StrongBodyLabel("Recent Conversions")
+        header_layout.addWidget(title)
+        header_layout.addStretch(1)
+
+        container_layout.addWidget(header)
+
+        # Separator
+        self.separator = QWidget()
+        self.separator.setFixedHeight(1)
+        container_layout.addWidget(self.separator)
+
+        # Scroll area for history items
+        self.scroll_area = SmoothScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
+
+        self.items_container = QWidget()
+        self.items_layout = QVBoxLayout(self.items_container)
+        self.items_layout.setContentsMargins(4, 4, 4, 4)
+        self.items_layout.setSpacing(2)
+        self.items_layout.addStretch(1)
+
+        self.scroll_area.setWidget(self.items_container)
+        container_layout.addWidget(self.scroll_area, 1)
+
+        # Empty state label
+        self.empty_label = BodyLabel("No recent conversions")
+        self.empty_label.setAlignment(Qt.AlignCenter)
+        self.empty_label.setStyleSheet("color: #888888; padding: 40px;")
+        self.items_layout.insertWidget(0, self.empty_label)
+
+        # Footer with buttons
+        footer = QWidget()
+        footer.setFixedHeight(52)
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(12, 8, 12, 8)
+        footer_layout.setSpacing(8)
+
+        self.show_btn = PushButton(FluentIcon.HOME, "Open App")
+        self.show_btn.clicked.connect(self._on_show_clicked)
+        footer_layout.addWidget(self.show_btn)
+
+        footer_layout.addStretch(1)
+
+        self.quit_btn = PushButton(FluentIcon.POWER_BUTTON, "Quit")
+        self.quit_btn.clicked.connect(self._on_quit_clicked)
+        footer_layout.addWidget(self.quit_btn)
+
+        container_layout.addWidget(footer)
+
+        # Layout for this widget
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(self.container)
+
+        # Listen for history changes via Qt signal (thread-safe)
+        self.history_manager.history_changed.connect(self._refresh_items)
+
+        # Initial load
+        self._refresh_items()
+
+    def _refresh_items(self):
+        """Refresh the list of history items."""
+        # Clear existing HistoryItemWidget instances only
+        # Iterate backwards to safely remove items
+        for i in range(self.items_layout.count() - 1, -1, -1):
+            item = self.items_layout.itemAt(i)
+            if item and item.widget() and isinstance(item.widget(), HistoryItemWidget):
+                widget = self.items_layout.takeAt(i).widget()
+                widget.deleteLater()
+
+        items = self.history_manager.get_all()
+
+        # Show/hide empty state
+        self.empty_label.setVisible(len(items) == 0)
+
+        # Add items after the empty label (index 1), before the stretch
+        for idx, hist_item in enumerate(items):
+            widget = HistoryItemWidget(hist_item)
+            widget.clicked.connect(self._open_file)
+            # Insert after empty_label (at index 1+idx)
+            self.items_layout.insertWidget(1 + idx, widget)
+
+    def _open_file(self, file_path: str):
+        """Open the converted file."""
+        if os.path.exists(file_path):
+            os.startfile(file_path)
+        self.hide()
+
+    def _on_show_clicked(self):
+        self.hide()
+        self.show_window_requested.emit()
+
+    def _on_quit_clicked(self):
+        self.hide()
+        self.quit_requested.emit()
+
+    def _update_theme_style(self):
+        """Update styles based on current theme."""
+        from qfluentwidgets import isDarkTheme
+
+        if isDarkTheme():
+            self.container.setStyleSheet(
+                """
+                #trayPanelContainer {
+                    background-color: #2d2d2d;
+                    border: 1px solid #404040;
+                    border-radius: 8px;
+                }
+                """
+            )
+            self.separator.setStyleSheet("background-color: #404040;")
+        else:
+            self.container.setStyleSheet(
+                """
+                #trayPanelContainer {
+                    background-color: #ffffff;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                }
+                """
+            )
+            self.separator.setStyleSheet("background-color: #e0e0e0;")
+
+    def showEvent(self, event):
+        """Refresh items and update theme when panel is shown."""
+        self._update_theme_style()
+        self._refresh_items()
+        super().showEvent(event)
+
+
 class SettingsPage(QWidget):
     """Page for global application settings."""
 
@@ -2080,6 +2526,17 @@ class MainWindow(FluentWindow):
 
         # System tray icon (initialized later if available)
         self.tray_icon = None
+        self.tray_history_panel = None
+        self._tray_base_icon = None
+        self._tray_animation_timer = None
+        self._tray_animation_angle = 0
+        self._active_conversions = 0
+
+        # Conversion history manager (shared across all conversion sources)
+        self.history_manager = ConversionHistoryManager()
+
+        # Connect to history changes for tray animation
+        self.history_manager.history_changed.connect(self._update_tray_animation)
 
         # Theme - Auto detect system theme
         setTheme(Theme.AUTO)
@@ -2088,10 +2545,12 @@ class MainWindow(FluentWindow):
         self.profile_manager = ProfileManager()
 
         # Pages
-        self.home_page = HomePage(self.profile_manager, self)
+        self.home_page = HomePage(self.profile_manager, self.history_manager, self)
         self.home_page.setObjectName("home")
 
-        self.monitor_page = MonitorPage(self.profile_manager, self)
+        self.monitor_page = MonitorPage(
+            self.profile_manager, self.history_manager, self
+        )
         self.monitor_page.setObjectName("monitor")
 
         self.settings_page = SettingsPage(self.profile_manager, self)
@@ -2151,10 +2610,15 @@ class MainWindow(FluentWindow):
         if icon.isNull():
             # Use FluentIcon as fallback
             icon = FluentIcon.SYNC.icon()
+        self._tray_base_icon = icon
         self.tray_icon.setIcon(icon)
         self.tray_icon.setToolTip(f"CSV/XLS Converter v{__version__}")
 
-        # Create tray menu
+        # Setup animation timer
+        self._tray_animation_timer = QTimer(self)
+        self._tray_animation_timer.timeout.connect(self._animate_tray_icon)
+
+        # Create tray menu (right-click)
         tray_menu = QMenu()
 
         # Show action
@@ -2171,15 +2635,56 @@ class MainWindow(FluentWindow):
 
         self.tray_icon.setContextMenu(tray_menu)
 
-        # Double-click to show window
+        # Create history panel (shown on single click)
+        self.tray_history_panel = TrayHistoryPanel(self.history_manager)
+        self.tray_history_panel.quit_requested.connect(self._quit_app)
+        self.tray_history_panel.show_window_requested.connect(self._show_window)
+
+        # Handle tray activation (single click shows panel, double click shows window)
         self.tray_icon.activated.connect(self._on_tray_activated)
 
         self.tray_icon.show()
 
     def _on_tray_activated(self, reason):
         """Handle tray icon activation."""
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            # Single click - show history panel near tray icon
+            self._show_history_panel()
+        elif reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            # Double click - show main window
             self._show_window()
+
+    def _show_history_panel(self):
+        """Show the history panel near the system tray."""
+        if not self.tray_history_panel:
+            return
+
+        # Get tray icon geometry to position the panel
+        tray_geometry = self.tray_icon.geometry()
+
+        # Position panel above/near the tray icon
+        panel_width = self.tray_history_panel.width()
+        panel_height = self.tray_history_panel.height()
+
+        # Get screen geometry
+        screen = QApplication.primaryScreen().availableGeometry()
+
+        # Calculate position - try to place above/near the tray
+        if tray_geometry.isValid() and not tray_geometry.isNull():
+            x = tray_geometry.x() - panel_width // 2 + tray_geometry.width() // 2
+            y = tray_geometry.y() - panel_height - 10
+        else:
+            # Fallback: bottom right of screen
+            x = screen.right() - panel_width - 20
+            y = screen.bottom() - panel_height - 60
+
+        # Keep panel within screen bounds
+        x = max(screen.left() + 10, min(x, screen.right() - panel_width - 10))
+        y = max(screen.top() + 10, min(y, screen.bottom() - panel_height - 10))
+
+        self.tray_history_panel.move(x, y)
+        self.tray_history_panel.show()
+        self.tray_history_panel.activateWindow()
 
     def _show_window(self):
         """Show and activate the main window."""
@@ -2190,7 +2695,57 @@ class MainWindow(FluentWindow):
     def _quit_app(self):
         """Actually quit the application."""
         self._is_quitting = True
+        if self._tray_animation_timer:
+            self._tray_animation_timer.stop()
         self.close()
+
+    def _update_tray_animation(self):
+        """Check if any conversions are in progress and update animation state."""
+        if not self.tray_icon:
+            return
+
+        items = self.history_manager.get_all()
+        processing_count = sum(1 for item in items if item.status == "processing")
+
+        if processing_count > 0 and not self._tray_animation_timer.isActive():
+            # Start animation
+            self._tray_animation_angle = 0
+            self._tray_animation_timer.start(100)  # Update every 100ms
+        elif processing_count == 0 and self._tray_animation_timer.isActive():
+            # Stop animation and restore original icon
+            self._tray_animation_timer.stop()
+            if self._tray_base_icon:
+                self.tray_icon.setIcon(self._tray_base_icon)
+
+    def _animate_tray_icon(self):
+        """Animate the tray icon by rotating it."""
+        if not self.tray_icon or not self._tray_base_icon:
+            return
+
+        self._tray_animation_angle = (self._tray_animation_angle + 30) % 360
+
+        # Get the base icon pixmap
+        size = 32  # Standard tray icon size
+        base_pixmap = self._tray_base_icon.pixmap(size, size)
+
+        # Create rotated pixmap
+        rotated_pixmap = QPixmap(size, size)
+        rotated_pixmap.fill(Qt.transparent)
+
+        painter = QPainter(rotated_pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        # Translate to center, rotate, translate back
+        painter.translate(size / 2, size / 2)
+        painter.rotate(self._tray_animation_angle)
+        painter.translate(-size / 2, -size / 2)
+
+        painter.drawPixmap(0, 0, base_pixmap)
+        painter.end()
+
+        # Set the rotated icon
+        self.tray_icon.setIcon(QIcon(rotated_pixmap))
 
     def closeEvent(self, event):
         """Minimize to tray instead of closing, unless quitting or tray unavailable."""
