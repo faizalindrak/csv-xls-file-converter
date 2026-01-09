@@ -32,6 +32,11 @@ except ImportError:
 # Regex for illegal XML characters
 ILLEGAL_CHARACTERS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
+# Excel limits and formula prefixes
+EXCEL_MAX_CELL_CHARS = 32767
+FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
 # Date detection patterns
 DATE_PATTERNS = [
     # DD/MM/YYYY or MM/DD/YYYY (ambiguous)
@@ -192,6 +197,17 @@ def sanitize_for_xml(value):
     return value
 
 
+def sanitize_for_xlsx_cell(value):
+    """Sanitize cell values for safe XLSX output."""
+    value = sanitize_for_xml(value)
+    if isinstance(value, str):
+        if value.startswith(FORMULA_PREFIXES):
+            value = "'" + value
+        if len(value) > EXCEL_MAX_CELL_CHARS:
+            value = value[:EXCEL_MAX_CELL_CHARS]
+    return value
+
+
 def clean_numeric(s):
     """
     Attempt to convert string to float, handling various formats.
@@ -259,14 +275,14 @@ def write_xlsx_with_xlsxwriter(
                 worksheet.set_column(col_idx, col_idx, None, text_format)
 
         for col_num, cell_data in enumerate(header):
-            worksheet.write(0, col_num, sanitize_for_xml(cell_data))
+            worksheet.write(0, col_num, sanitize_for_xlsx_cell(cell_data))
 
         for row_num, row_data in enumerate(data, 1):
             for col_num, cell_data in enumerate(row_data):
-                sanitized_cell = sanitize_for_xml(cell_data)
-                # Remove backtick prefix before writing
-                if isinstance(sanitized_cell, str) and sanitized_cell.startswith("`"):
-                    sanitized_cell = sanitized_cell[1:]
+                # Remove backtick prefix before sanitizing.
+                if isinstance(cell_data, str) and cell_data.startswith("`"):
+                    cell_data = cell_data[1:]
+                sanitized_cell = sanitize_for_xlsx_cell(cell_data)
 
                 # Check if this is a date column
                 if date_columns and col_num in date_columns:

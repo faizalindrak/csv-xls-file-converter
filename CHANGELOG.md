@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.16] - 2026-01-09
+
+### Fixed
+- Escape formula-like CSV values to prevent Excel formula injection
+- Truncate overly long cell values to Excel's maximum length
+
 ## [0.4.15] - 2026-01-09
 
 ### Fixed

@@ -193,7 +193,9 @@ self.profile_manager.update_single_file_settings(settings)  # Automatically save
    git tag v0.2.4
    git push origin v0.2.4
    ```
-5. GitHub Actions builds and creates release with changelog notes
+5. Create GitHub release notes for the tag (copy from `CHANGELOG.md`)
+6. GitHub Actions builds and creates release with changelog notes
+
 
 ## Dependencies
 - Core: `xlsxwriter`, `watchdog`
