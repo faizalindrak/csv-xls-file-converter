@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QMenu,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QSharedMemory
-from PySide6.QtGui import QColor, QAction
+from PySide6.QtGui import QColor, QAction, QFont
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from qfluentwidgets import (
@@ -2298,7 +2298,18 @@ class SingleInstanceManager:
 
 
 def main():
+    # Enable high DPI scaling for crisp fonts on high resolution displays
+    # Must be called before QApplication is created
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+
     app = QApplication(sys.argv)
+
+    # Set application font with larger size for better readability on high DPI
+    font = QFont("Segoe UI", 10)  # Increased from default ~9pt
+    font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+    app.setFont(font)
 
     # Single instance check
     instance_manager = SingleInstanceManager()

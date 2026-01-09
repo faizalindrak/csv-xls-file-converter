@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.12] - 2026-01-09
+
+### Added
+- High DPI scaling support for crisp font rendering on high resolution displays
+- Improved font configuration with full hinting for sharper text
+
+### Changed
+- Increased default font size from ~9pt to 10pt for better readability
+
 ## [0.3.11] - 2026-01-08
 
 ### Added
