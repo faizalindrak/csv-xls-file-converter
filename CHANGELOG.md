@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.18] - 2026-01-10
+
+### Added
+- Windows Explorer context menu integration for CSV and XLS files
+- Settings toggle to enable or disable the context menu entries
+
+### Changed
+- Silent CLI mode with toast notifications for context menu conversions
+
 ## [0.4.17] - 2026-01-09
 
 ### Fixed

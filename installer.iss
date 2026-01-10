@@ -2,7 +2,7 @@
 ; Build with: iscc installer.iss
 
 #define MyAppName "CSV-XLS Converter"
-#define MyAppVersion "0.4.16"
+#define MyAppVersion "0.4.18"
 #define MyAppPublisher "CSV-XLS Converter"
 #define MyAppURL "https://github.com/faizalindrak/csv-xls-file-converter"
 #define MyAppExeName "CSV-XLS-Converter.exe"
