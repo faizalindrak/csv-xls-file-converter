@@ -244,13 +244,8 @@ def show_windows_notification(
         except ImportError:
             pass
 
-        # Fallback: Use Windows balloon notification via ctypes
-        # This is a simplified approach that works without external dependencies
+        # Fallback: Use Windows toast notification via PowerShell
         try:
-            from ctypes import windll, create_unicode_buffer, byref
-            from ctypes.wintypes import DWORD
-
-            # Use powershell to show toast notification
             import subprocess
 
             # Escape quotes in message
