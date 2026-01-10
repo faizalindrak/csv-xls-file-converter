@@ -2,7 +2,7 @@
 ; Build with: iscc installer.iss
 
 #define MyAppName "CSV-XLS Converter"
-#define MyAppVersion "0.4.18"
+#define MyAppVersion "0.4.19"
 #define MyAppPublisher "CSV-XLS Converter"
 #define MyAppURL "https://github.com/faizalindrak/csv-xls-file-converter"
 #define MyAppExeName "CSV-XLS-Converter.exe"
@@ -83,11 +83,13 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Fil
 ; Context menu entries for CSV files (Windows 10 classic style)
 Root: HKCU; Subkey: "Software\Classes\.csv\shell\ConvertToXLSX"; ValueType: string; ValueName: ""; ValueData: "Convert to XLSX"; Tasks: contextmenu; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\.csv\shell\ConvertToXLSX"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#MyAppExeName}"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\.csv\shell\ConvertToXLSX"; ValueType: string; ValueName: "Position"; ValueData: "Top"; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\Classes\.csv\shell\ConvertToXLSX\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --silent ""%1"""; Tasks: contextmenu
 
 ; Context menu entries for XLS files (Windows 10 classic style)
 Root: HKCU; Subkey: "Software\Classes\.xls\shell\ConvertToXLSX"; ValueType: string; ValueName: ""; ValueData: "Convert to XLSX"; Tasks: contextmenu; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\.xls\shell\ConvertToXLSX"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#MyAppExeName}"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\.xls\shell\ConvertToXLSX"; ValueType: string; ValueName: "Position"; ValueData: "Top"; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\Classes\.xls\shell\ConvertToXLSX\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --silent ""%1"""; Tasks: contextmenu
 
 ; Context menu entries for CSV files (Windows 11 modern style)

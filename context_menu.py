@@ -105,9 +105,8 @@ def register_context_menu() -> tuple[bool, str]:
                 if icon_path:
                     winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, icon_path)
 
-                # Try to promote into Win11 top-level menu
-                if "SystemFileAssociations" in reg_path:
-                    winreg.SetValueEx(key, "Position", 0, winreg.REG_SZ, "Top")
+                # Promote into top-level menu (works for both Win10 and Win11)
+                winreg.SetValueEx(key, "Position", 0, winreg.REG_SZ, "Top")
 
                 winreg.CloseKey(key)
 

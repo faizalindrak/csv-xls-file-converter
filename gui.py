@@ -2471,6 +2471,14 @@ class SettingsPage(QWidget):
 
         card_layout.addLayout(context_menu_layout)
 
+        # Windows 11 note
+        if sys.platform == "win32":
+            win11_note = CaptionLabel(
+                "Tip: On Windows 11, use Shift+Right-click to see the menu directly"
+            )
+            win11_note.setTextColor(QColor(100, 100, 100), QColor(140, 140, 140))
+            card_layout.addWidget(win11_note)
+
         # Platform note for non-Windows
         if sys.platform != "win32":
             note_label = CaptionLabel(
@@ -2941,7 +2949,90 @@ class SingleInstanceManager:
             self._shared_memory.detach()
 
 
+def run_silent_conversion(file_path: str) -> int:
+    """
+    Run a silent conversion (for context menu integration).
+
+    Converts the file and shows a Windows notification with the result.
+    No GUI window is shown.
+
+    Returns:
+        0 on success, 1 on failure
+    """
+    if not os.path.exists(file_path):
+        # Show error notification
+        try:
+            from context_menu import show_windows_notification
+
+            show_windows_notification(
+                "Conversion Failed",
+                f"File not found: {os.path.basename(file_path)}",
+                "error",
+            )
+        except ImportError:
+            pass
+        return 1
+
+    # Check file extension
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext not in [".csv", ".xls"]:
+        try:
+            from context_menu import show_windows_notification
+
+            show_windows_notification(
+                "Conversion Failed", f"Unsupported file type: {ext}", "error"
+            )
+        except ImportError:
+            pass
+        return 1
+
+    # Perform conversion
+    try:
+        result = convert_to_xlsx(file_path)
+        if result:
+            # Success notification
+            try:
+                from context_menu import show_windows_notification
+
+                show_windows_notification(
+                    "Conversion Complete",
+                    f"Created: {os.path.basename(result)}",
+                    "info",
+                )
+            except ImportError:
+                pass
+            return 0
+        else:
+            # Failed notification
+            try:
+                from context_menu import show_windows_notification
+
+                show_windows_notification(
+                    "Conversion Failed",
+                    f"Could not convert: {os.path.basename(file_path)}",
+                    "error",
+                )
+            except ImportError:
+                pass
+            return 1
+    except Exception as e:
+        try:
+            from context_menu import show_windows_notification
+
+            show_windows_notification("Conversion Failed", str(e), "error")
+        except ImportError:
+            pass
+        return 1
+
+
 def main():
+    # Check for --silent flag (context menu invocation)
+    # Parse before QApplication to avoid creating a GUI
+    if len(sys.argv) >= 3 and sys.argv[1] == "--silent":
+        file_path = sys.argv[2]
+        exit_code = run_silent_conversion(file_path)
+        sys.exit(exit_code)
+
     # Enable high DPI scaling for crisp fonts on high resolution displays
     # Must be called before QApplication is created
     QApplication.setHighDpiScaleFactorRoundingPolicy(

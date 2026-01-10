@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.19] - 2026-01-10
+
+### Fixed
+- Context menu now actually converts files instead of just opening the app
+- Silent conversion mode with Windows toast notifications for results
+
+### Changed
+- Context menu appears at top position in Windows 10 classic menu
+- Added Shift+Right-click tip in Settings for Windows 11 users
+
 ## [0.4.18] - 2026-01-10
 
 ### Added
