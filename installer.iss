@@ -60,6 +60,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 6.1; Check: not IsAdminInstallMode
+Name: "contextmenu"; Description: "Add ""Convert to XLSX"" to right-click context menu"; GroupDescription: "Windows Explorer Integration:"; Flags: checkedonce
 
 [Files]
 ; Main executable from PyInstaller output
@@ -77,6 +78,29 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 ; Quick Launch shortcut (legacy)
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
+
+[Registry]
+; Context menu entries for CSV files (Windows 10 classic style)
+Root: HKCU; Subkey: "Software\Classes\.csv\shell\ConvertToXLSX"; ValueType: string; ValueName: ""; ValueData: "Convert to XLSX"; Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\.csv\shell\ConvertToXLSX"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#MyAppExeName}"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\.csv\shell\ConvertToXLSX\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --silent ""%1"""; Tasks: contextmenu
+
+; Context menu entries for XLS files (Windows 10 classic style)
+Root: HKCU; Subkey: "Software\Classes\.xls\shell\ConvertToXLSX"; ValueType: string; ValueName: ""; ValueData: "Convert to XLSX"; Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\.xls\shell\ConvertToXLSX"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#MyAppExeName}"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\.xls\shell\ConvertToXLSX\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --silent ""%1"""; Tasks: contextmenu
+
+; Context menu entries for CSV files (Windows 11 modern style)
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.csv\shell\ConvertToXLSX"; ValueType: string; ValueName: ""; ValueData: "Convert to XLSX"; Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.csv\shell\ConvertToXLSX"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#MyAppExeName}"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.csv\shell\ConvertToXLSX"; ValueType: string; ValueName: "Position"; ValueData: "Top"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.csv\shell\ConvertToXLSX\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --silent ""%1"""; Tasks: contextmenu
+
+; Context menu entries for XLS files (Windows 11 modern style)
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.xls\shell\ConvertToXLSX"; ValueType: string; ValueName: ""; ValueData: "Convert to XLSX"; Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.xls\shell\ConvertToXLSX"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#MyAppExeName}"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.xls\shell\ConvertToXLSX"; ValueType: string; ValueName: "Position"; ValueData: "Top"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.xls\shell\ConvertToXLSX\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --silent ""%1"""; Tasks: contextmenu
 
 [Run]
 ; Option to launch app after installation

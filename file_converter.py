@@ -13,6 +13,8 @@ import re
 import shutil
 from pathlib import Path
 from datetime import datetime
+from contextlib import redirect_stdout, redirect_stderr
+
 
 try:
     import xlsxwriter
@@ -714,6 +716,11 @@ Examples:
         action="store_true",
         help="Remove backtick prefixes from text columns",
     )
+    parser.add_argument(
+        "--silent",
+        action="store_true",
+        help="Silent mode: no console output, show Windows notification on completion",
+    )
 
     args = parser.parse_args()
 
@@ -730,14 +737,48 @@ Examples:
     # Single file mode
     if args.input:
         if not os.path.exists(args.input):
-            print(f"Error: File not found: {args.input}")
+            if not args.silent:
+                print(f"Error: File not found: {args.input}")
             sys.exit(1)
 
-        result = convert_to_xlsx(args.input, args.output, args.remove_backticks)
-        if result:
-            print(f"Successfully converted to: {result}")
+        if args.silent:
+            with open(os.devnull, "w") as devnull:
+                with redirect_stdout(devnull), redirect_stderr(devnull):
+                    result = convert_to_xlsx(
+                        args.input, args.output, args.remove_backticks
+                    )
         else:
-            print("Conversion failed.")
+            result = convert_to_xlsx(args.input, args.output, args.remove_backticks)
+
+        if result:
+            if args.silent:
+                # Show Windows toast notification
+                try:
+                    from context_menu import show_windows_notification
+
+                    filename = os.path.basename(result)
+                    show_windows_notification(
+                        "Conversion Complete",
+                        f"Successfully converted to {filename}",
+                        "info",
+                    )
+                except ImportError:
+                    pass  # Silent mode, no output
+            else:
+                print(f"Successfully converted to: {result}")
+        else:
+            if args.silent:
+                try:
+                    from context_menu import show_windows_notification
+
+                    filename = os.path.basename(args.input)
+                    show_windows_notification(
+                        "Conversion Failed", f"Failed to convert {filename}", "error"
+                    )
+                except ImportError:
+                    pass
+            else:
+                print("Conversion failed.")
             sys.exit(1)
         return
 

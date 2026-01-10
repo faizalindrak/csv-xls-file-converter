@@ -68,6 +68,17 @@ if current_dir not in sys.path:
 
 from file_converter import convert_to_xlsx, WATCHDOG_AVAILABLE
 
+try:
+    from context_menu import (
+        register_context_menu,
+        unregister_context_menu,
+        is_context_menu_registered,
+    )
+
+    CONTEXT_MENU_AVAILABLE = True
+except ImportError:
+    CONTEXT_MENU_AVAILABLE = False
+
 if WATCHDOG_AVAILABLE:
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
@@ -2432,12 +2443,43 @@ class SettingsPage(QWidget):
 
         card_layout.addLayout(startup_layout)
 
+        # Context menu setting
+        context_menu_layout = QHBoxLayout()
+        context_menu_layout.setSpacing(12)
+
+        context_menu_info = QVBoxLayout()
+        context_menu_info.setSpacing(2)
+        context_menu_title = StrongBodyLabel("Windows Context Menu")
+        context_menu_desc = CaptionLabel(
+            "Add 'Convert to XLSX' option when right-clicking CSV/XLS files"
+        )
+        context_menu_desc.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+        context_menu_info.addWidget(context_menu_title)
+        context_menu_info.addWidget(context_menu_desc)
+        context_menu_layout.addLayout(context_menu_info, 1)
+
+        self.context_menu_switch = SwitchButton()
+        # Initialize from actual registry state
+        if CONTEXT_MENU_AVAILABLE:
+            self.context_menu_switch.setChecked(is_context_menu_registered())
+            self.context_menu_switch.checkedChanged.connect(
+                self._on_context_menu_changed
+            )
+        else:
+            self.context_menu_switch.setEnabled(False)
+        context_menu_layout.addWidget(self.context_menu_switch)
+
+        card_layout.addLayout(context_menu_layout)
+
         # Platform note for non-Windows
         if sys.platform != "win32":
-            note_label = CaptionLabel("Note: Auto-startup is only available on Windows")
+            note_label = CaptionLabel(
+                "Note: Auto-startup and context menu are only available on Windows"
+            )
             note_label.setTextColor(QColor(200, 150, 50), QColor(200, 150, 50))
             card_layout.addWidget(note_label)
             self.auto_startup_switch.setEnabled(False)
+            self.context_menu_switch.setEnabled(False)
 
         layout.addWidget(settings_card)
 
@@ -2521,6 +2563,36 @@ class SettingsPage(QWidget):
             InfoBar.error(
                 title="Error",
                 content="Failed to update auto-startup setting",
+                parent=self.window(),
+                position=InfoBarPosition.TOP,
+                duration=3000,
+            )
+
+    def _on_context_menu_changed(self, checked: bool):
+        """Handle context menu registration toggle."""
+        if not CONTEXT_MENU_AVAILABLE:
+            self.context_menu_switch.setChecked(not checked)
+            return
+
+        if checked:
+            success, message = register_context_menu()
+        else:
+            success, message = unregister_context_menu()
+
+        if success:
+            InfoBar.success(
+                title="Context Menu Updated",
+                content=f"Context menu {'enabled' if checked else 'disabled'}",
+                parent=self.window(),
+                position=InfoBarPosition.TOP,
+                duration=3000,
+            )
+        else:
+            # Revert the switch if failed
+            self.context_menu_switch.setChecked(not checked)
+            InfoBar.error(
+                title="Error",
+                content=message,
                 parent=self.window(),
                 position=InfoBarPosition.TOP,
                 duration=3000,
