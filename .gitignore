@@ -63,3 +63,6 @@ nul
 
 # Linter
 .ruff_cache/
+
+# Test scripts
+test_history.py

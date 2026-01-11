@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.20] - 2026-01-12
+
+### Added
+- Persistent conversion history shared between CLI and GUI
+- Context menu conversions now appear in system tray history panel
+- New `history_util.py` module for Qt-independent history management
+
+### Changed
+- History is now saved to disk and survives app restarts
+- GUI reloads history from disk to catch external (CLI/context menu) conversions
+
 ## [0.4.19] - 2026-01-10
 
 ### Fixed

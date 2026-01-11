@@ -751,6 +751,18 @@ Examples:
             result = convert_to_xlsx(args.input, args.output, args.remove_backticks)
 
         if result:
+            # Add to recent conversions history
+            try:
+                from history_util import add_to_history
+
+                add_to_history(
+                    source_path=os.path.abspath(args.input),
+                    output_path=os.path.abspath(result),
+                    status="success",
+                )
+            except ImportError:
+                pass  # History utility not available
+
             if args.silent:
                 # Show Windows toast notification
                 try:
@@ -767,6 +779,20 @@ Examples:
             else:
                 print(f"Successfully converted to: {result}")
         else:
+            # Add to recent conversions history as failed
+            try:
+                from history_util import add_to_history
+
+                output_path = args.output or os.path.splitext(args.input)[0] + ".xlsx"
+                add_to_history(
+                    source_path=os.path.abspath(args.input),
+                    output_path=os.path.abspath(output_path),
+                    status="failed",
+                    error_message="Conversion failed",
+                )
+            except ImportError:
+                pass  # History utility not available
+
             if args.silent:
                 try:
                     from context_menu import show_windows_notification

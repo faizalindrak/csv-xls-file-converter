@@ -69,6 +69,19 @@ if current_dir not in sys.path:
 from file_converter import convert_to_xlsx, WATCHDOG_AVAILABLE
 
 try:
+    from history_util import get_history_file_path as get_shared_history_path
+except ImportError:
+    # Fallback if history_util is not available
+    def get_shared_history_path():
+        if sys.platform == "win32":
+            app_data = os.environ.get("APPDATA", os.path.expanduser("~"))
+        else:
+            app_data = os.path.expanduser("~/.config")
+        config_dir = os.path.join(app_data, "csv-xls-converter")
+        os.makedirs(config_dir, exist_ok=True)
+        return os.path.join(config_dir, "conversion_history.json")
+
+try:
     from context_menu import (
         register_context_menu,
         unregister_context_menu,
@@ -267,6 +280,32 @@ class ConversionHistoryManager(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._items: List[ConversionHistoryItem] = []
+        self._history_file = get_shared_history_path()
+        self._load_from_disk()
+
+    def _load_from_disk(self):
+        """Load history from persistent storage."""
+        if os.path.exists(self._history_file):
+            try:
+                with open(self._history_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self._items = [
+                        ConversionHistoryItem.from_dict(item) for item in data
+                    ]
+                    # Ensure we don't exceed max items
+                    if len(self._items) > self.MAX_ITEMS:
+                        self._items = self._items[: self.MAX_ITEMS]
+            except (json.JSONDecodeError, IOError, KeyError) as e:
+                print(f"Warning: Could not load conversion history: {e}")
+                self._items = []
+
+    def _save_to_disk(self):
+        """Save history to persistent storage."""
+        try:
+            with open(self._history_file, "w", encoding="utf-8") as f:
+                json.dump([item.to_dict() for item in self._items], f, indent=2)
+        except IOError as e:
+            print(f"Warning: Could not save conversion history: {e}")
 
     def add(self, item: ConversionHistoryItem):
         """Add a conversion record to history."""
@@ -277,6 +316,7 @@ class ConversionHistoryManager(QObject):
                 and existing.status == "processing"
             ):
                 self._items[i] = item
+                self._save_to_disk()
                 self.history_changed.emit()
                 return
 
@@ -287,6 +327,7 @@ class ConversionHistoryManager(QObject):
         if len(self._items) > self.MAX_ITEMS:
             self._items = self._items[: self.MAX_ITEMS]
 
+        self._save_to_disk()
         self.history_changed.emit()
 
     def add_processing(self, source_path: str, output_path: str):
@@ -331,7 +372,8 @@ class ConversionHistoryManager(QObject):
         )
 
     def get_all(self) -> List[ConversionHistoryItem]:
-        """Get all history items."""
+        """Get all history items (reloads from disk to catch external changes)."""
+        self._load_from_disk()
         return self._items.copy()
 
 
