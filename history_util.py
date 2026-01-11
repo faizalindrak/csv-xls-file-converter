@@ -7,7 +7,6 @@ import os
 import sys
 import json
 import time
-from typing import Optional
 
 
 def get_config_dir() -> str:
