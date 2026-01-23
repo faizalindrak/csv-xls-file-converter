@@ -39,6 +39,7 @@ from qfluentwidgets import (
     PushButton,
     PrimaryPushButton,
     SwitchButton,
+    CheckBox,
     BodyLabel,
     SubtitleLabel,
     CaptionLabel,
@@ -1559,6 +1560,25 @@ class FolderMonitorCard(SimpleCardWidget):
         opt_layout.addWidget(date_label)
         opt_layout.addStretch(1)
         self.main_layout.addLayout(opt_layout)
+
+        # Format Filter Section
+        format_layout = QHBoxLayout()
+        format_layout.setContentsMargins(0, 2, 0, 2)
+        format_label = BodyLabel("Convert:")
+        format_layout.addWidget(format_label)
+        format_layout.addSpacing(8)
+
+        self.csv_checkbox = CheckBox("CSV")
+        self.csv_checkbox.setChecked(True)
+        format_layout.addWidget(self.csv_checkbox)
+        format_layout.addSpacing(8)
+
+        self.xls_checkbox = CheckBox("XLS")
+        self.xls_checkbox.setChecked(True)
+        format_layout.addWidget(self.xls_checkbox)
+        format_layout.addStretch(1)
+
+        self.main_layout.addLayout(format_layout)
 
         # Action Buttons
         btn_layout = QHBoxLayout()
