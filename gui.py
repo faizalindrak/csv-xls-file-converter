@@ -1657,6 +1657,22 @@ class FolderMonitorCard(SimpleCardWidget):
         process_existing = self.process_existing_switch.isChecked()
         auto_detect_dates = self.auto_detect_dates_switch.isChecked()
 
+        # Collect selected formats
+        file_formats = []
+        if self.csv_checkbox.isChecked():
+            file_formats.append('csv')
+        if self.xls_checkbox.isChecked():
+            file_formats.append('xls')
+
+        if not file_formats:
+            InfoBar.error(
+                title="Error",
+                content="Please select at least one file format to convert.",
+                parent=self.window(),
+                position=InfoBarPosition.TOP,
+            )
+            return
+
         # Disable inputs
         self.toggle_inputs(False)
         self.reset_stats()
@@ -1668,6 +1684,7 @@ class FolderMonitorCard(SimpleCardWidget):
             delete_source,
             process_existing,
             auto_detect_dates,
+            file_formats,  # Add this new argument
         )
         self.monitor_thread.log_signal.connect(self.append_log)
         self.monitor_thread.status_signal.connect(self.update_status)
