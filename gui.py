@@ -1706,6 +1706,8 @@ class FolderMonitorCard(SimpleCardWidget):
         self.delete_source_switch.setEnabled(enable)
         self.process_existing_switch.setEnabled(enable)
         self.auto_detect_dates_switch.setEnabled(enable)
+        self.csv_checkbox.setEnabled(enable)
+        self.xls_checkbox.setEnabled(enable)
         self.start_btn.setEnabled(enable)
         self.stop_btn.setEnabled(not enable)
 
