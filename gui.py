@@ -704,6 +704,7 @@ class MonitorThread(QThread):
     def create_event_handler(self):
         # We define the handler inside to access 'self' easily
         thread_ref = self
+        allowed_formats = self.file_formats
 
         class GuiConversionHandler(FileSystemEventHandler):
             def __init__(self):
@@ -711,8 +712,8 @@ class MonitorThread(QThread):
                 self.processing = set()
 
             def _should_process(self, file_path):
-                ext = os.path.splitext(file_path)[1].lower()
-                return ext in [".csv", ".xls"]
+                ext = os.path.splitext(file_path)[1].lower().lstrip('.')
+                return ext in allowed_formats
 
             def _process_file(self, file_path):
                 if file_path in self.processing:
