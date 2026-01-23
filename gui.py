@@ -868,6 +868,22 @@ class ProfileEditDialog(MessageBoxBase):
         options_layout.addWidget(BodyLabel("Dates (β)"))
         options_layout.addStretch(1)
 
+        # File Format Filter
+        format_layout = QHBoxLayout()
+        format_layout.setContentsMargins(0, 8, 0, 0)
+
+        self.csv_checkbox = CheckBox(self)
+        self.csv_checkbox.setText("CSV")
+        self.csv_checkbox.setChecked('csv' in self.profile.file_formats)
+        format_layout.addWidget(self.csv_checkbox)
+        format_layout.addSpacing(12)
+
+        self.xls_checkbox = CheckBox(self)
+        self.xls_checkbox.setText("XLS")
+        self.xls_checkbox.setChecked('xls' in self.profile.file_formats)
+        format_layout.addWidget(self.xls_checkbox)
+        format_layout.addStretch(1)
+
         # Add to view layout
         self.viewLayout.addWidget(self.titleLabel)
         self.viewLayout.addSpacing(12)
@@ -882,6 +898,9 @@ class ProfileEditDialog(MessageBoxBase):
         self.viewLayout.addSpacing(8)
         self.viewLayout.addWidget(StrongBodyLabel("Options"))
         self.viewLayout.addLayout(options_layout)
+        self.viewLayout.addSpacing(8)
+        self.viewLayout.addWidget(StrongBodyLabel("File Formats"))
+        self.viewLayout.addLayout(format_layout)
 
         self.widget.setMinimumWidth(450)
         self.yesButton.setText("Save")
@@ -905,6 +924,15 @@ class ProfileEditDialog(MessageBoxBase):
         self.profile.process_existing = self.process_existing_switch.isChecked()
         self.profile.delete_source = self.delete_source_switch.isChecked()
         self.profile.auto_detect_dates = self.auto_dates_switch.isChecked()
+
+        # Collect selected file formats
+        file_formats = []
+        if self.csv_checkbox.isChecked():
+            file_formats.append('csv')
+        if self.xls_checkbox.isChecked():
+            file_formats.append('xls')
+        self.profile.file_formats = file_formats
+
         return self.profile
 
 
