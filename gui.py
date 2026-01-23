@@ -588,7 +588,8 @@ class MonitorThread(QThread):
         folder = Path(self.folder_path)
         chunk = []
 
-        for pattern in ["**/*.csv", "**/*.xls"]:
+        for fmt in self.file_formats:
+            pattern = f"**/*.{fmt}"
             try:
                 for file_path in folder.glob(pattern):
                     if not self._is_running:
