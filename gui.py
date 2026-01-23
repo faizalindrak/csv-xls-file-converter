@@ -520,6 +520,7 @@ class MonitorThread(QThread):
         delete_source,
         process_existing,
         auto_detect_dates=False,
+        file_formats=None,
     ):
         super().__init__()
         self.folder_path = folder_path
@@ -527,6 +528,7 @@ class MonitorThread(QThread):
         self.delete_source = delete_source
         self.process_existing = process_existing
         self.auto_detect_dates = auto_detect_dates
+        self.file_formats = file_formats if file_formats is not None else ['csv', 'xls']
         self.observer = None
         self._is_running = False
         self._file_queue = Queue(maxsize=MAX_QUEUE_SIZE)
