@@ -260,6 +260,7 @@ class MonitorProfile:
     delete_source: bool = False
     process_existing: bool = True
     auto_detect_dates: bool = False
+    file_formats: list = field(default_factory=lambda: ['csv', 'xls'])
 
     def to_dict(self) -> dict:
         return asdict(self)
