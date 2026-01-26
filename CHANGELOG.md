@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.21] - 2026-01-26
+
+### Added
+- File format filter checkboxes (CSV/XLS) in folder monitor profiles
+- Per-profile format selection persisted to settings
+- Format filter applied to both new file detection and existing file discovery
+
+### Fixed
+- Remove unused `pytest` imports in test files (ruff linting)
+
+### Changed
+- Format checkboxes disabled during active monitoring to prevent mid-session changes
+
 ## [0.4.20] - 2026-01-12
 
 ### Added

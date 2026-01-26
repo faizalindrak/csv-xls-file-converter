@@ -1,5 +1,4 @@
 # tests/test_monitor_profile.py
-import pytest
 import sys
 from unittest.mock import MagicMock
 
