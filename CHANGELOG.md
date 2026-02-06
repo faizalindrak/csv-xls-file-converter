@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.22] - 2026-02-06
+
+### Added
+- Folder monitoring: exclude keywords field in GUI profiles (skip conversion for matching filenames)
+- CLI monitoring: new `--exclude "kw1,kw2"` flag to skip files by filename keyword
+
 ## [0.4.21] - 2026-01-26
 
 ### Added

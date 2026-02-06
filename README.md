@@ -71,6 +71,9 @@ python file_converter.py --monitor "C:\input" --output "C:\output"
 
 # Delete source files after conversion
 python file_converter.py --monitor "C:\input" --delete-source
+
+# Exclude files by keyword (skip conversion)
+python file_converter.py --monitor "C:\input" --exclude "temp,backup,draft"
 ```
 
 **Options:**
@@ -79,6 +82,7 @@ python file_converter.py --monitor "C:\input" --delete-source
 - `--delete-source`: Delete original files after successful conversion.
 - `--skip-existing`: Don't process files already present in the folder (monitor mode only).
 - `--remove-backticks`: Remove leading backticks from text columns.
+- `--exclude KEYWORDS`: Comma-separated keywords; files containing any keyword in their filename are skipped (monitor mode only).
 
 ## Notes
 
