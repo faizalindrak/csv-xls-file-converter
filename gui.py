@@ -82,6 +82,7 @@ except ImportError:
         os.makedirs(config_dir, exist_ok=True)
         return os.path.join(config_dir, "conversion_history.json")
 
+
 try:
     from context_menu import (
         register_context_menu,
@@ -261,7 +262,8 @@ class MonitorProfile:
     delete_source: bool = False
     process_existing: bool = True
     auto_detect_dates: bool = False
-    file_formats: list = field(default_factory=lambda: ['csv', 'xls'])
+    file_formats: list = field(default_factory=lambda: ["csv", "xls"])
+    exclude_keywords: str = ""  # Comma-separated keywords to exclude from conversion
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -522,6 +524,7 @@ class MonitorThread(QThread):
         process_existing,
         auto_detect_dates=False,
         file_formats=None,
+        exclude_keywords="",
     ):
         super().__init__()
         self.folder_path = folder_path
@@ -529,7 +532,8 @@ class MonitorThread(QThread):
         self.delete_source = delete_source
         self.process_existing = process_existing
         self.auto_detect_dates = auto_detect_dates
-        self.file_formats = file_formats if file_formats is not None else ['csv', 'xls']
+        self.file_formats = file_formats if file_formats is not None else ["csv", "xls"]
+        self.exclude_keywords = exclude_keywords
         self.observer = None
         self._is_running = False
         self._file_queue = Queue(maxsize=MAX_QUEUE_SIZE)
@@ -581,6 +585,21 @@ class MonitorThread(QThread):
     def stop(self):
         self._is_running = False
 
+    def _matches_exclude_keyword(self, file_path: str) -> bool:
+        """Check if filename contains any exclude keyword."""
+        if not self.exclude_keywords:
+            return False
+
+        filename = os.path.basename(file_path).lower()
+        keywords = [
+            k.strip().lower() for k in self.exclude_keywords.split(",") if k.strip()
+        ]
+
+        for keyword in keywords:
+            if keyword in filename:
+                return True
+        return False
+
     def _discover_files_lazy(self):
         """
         Generator that yields files lazily to avoid loading all paths into memory.
@@ -595,6 +614,9 @@ class MonitorThread(QThread):
                 for file_path in folder.glob(pattern):
                     if not self._is_running:
                         return
+                    # Skip files matching exclude keywords
+                    if self._matches_exclude_keyword(str(file_path)):
+                        continue
                     chunk.append(file_path)
                     if len(chunk) >= DISCOVERY_CHUNK_SIZE:
                         yield chunk
@@ -714,8 +736,13 @@ class MonitorThread(QThread):
                 self.processing = set()
 
             def _should_process(self, file_path):
-                ext = os.path.splitext(file_path)[1].lower().lstrip('.')
-                return ext in allowed_formats
+                ext = os.path.splitext(file_path)[1].lower().lstrip(".")
+                if ext not in allowed_formats:
+                    return False
+                # Check exclude keywords
+                if thread_ref._matches_exclude_keyword(file_path):
+                    return False
+                return True
 
             def _process_file(self, file_path):
                 if file_path in self.processing:
@@ -874,13 +901,13 @@ class ProfileEditDialog(MessageBoxBase):
 
         self.csv_checkbox = CheckBox(self)
         self.csv_checkbox.setText("CSV")
-        self.csv_checkbox.setChecked('csv' in self.profile.file_formats)
+        self.csv_checkbox.setChecked("csv" in self.profile.file_formats)
         format_layout.addWidget(self.csv_checkbox)
         format_layout.addSpacing(12)
 
         self.xls_checkbox = CheckBox(self)
         self.xls_checkbox.setText("XLS")
-        self.xls_checkbox.setChecked('xls' in self.profile.file_formats)
+        self.xls_checkbox.setChecked("xls" in self.profile.file_formats)
         format_layout.addWidget(self.xls_checkbox)
         format_layout.addStretch(1)
 
@@ -901,6 +928,24 @@ class ProfileEditDialog(MessageBoxBase):
         self.viewLayout.addSpacing(8)
         self.viewLayout.addWidget(StrongBodyLabel("File Formats"))
         self.viewLayout.addLayout(format_layout)
+
+        # Exclude Keywords Section
+        self.viewLayout.addSpacing(8)
+        self.viewLayout.addWidget(StrongBodyLabel("Exclude Keywords"))
+        self.exclude_keywords_edit = LineEdit(self)
+        self.exclude_keywords_edit.setPlaceholderText(
+            "e.g., temp, backup, draft (comma-separated)"
+        )
+        self.exclude_keywords_edit.setText(self.profile.exclude_keywords)
+        self.exclude_keywords_edit.setClearButtonEnabled(True)
+        self.viewLayout.addWidget(self.exclude_keywords_edit)
+
+        # Add help text
+        exclude_help = CaptionLabel(
+            "Files containing these keywords in their name will be skipped"
+        )
+        exclude_help.setTextColor(QColor(128, 128, 128), QColor(160, 160, 160))
+        self.viewLayout.addWidget(exclude_help)
 
         self.widget.setMinimumWidth(450)
         self.yesButton.setText("Save")
@@ -928,10 +973,12 @@ class ProfileEditDialog(MessageBoxBase):
         # Collect selected file formats
         file_formats = []
         if self.csv_checkbox.isChecked():
-            file_formats.append('csv')
+            file_formats.append("csv")
         if self.xls_checkbox.isChecked():
-            file_formats.append('xls')
+            file_formats.append("xls")
         self.profile.file_formats = file_formats
+
+        self.profile.exclude_keywords = self.exclude_keywords_edit.text().strip()
 
         return self.profile
 
@@ -1011,7 +1058,17 @@ class ProfileCard(SimpleCardWidget):
         """Update the displayed profile data."""
         self.profile = profile
         self.name_label.setText(profile.name)
-        self.path_label.setText(profile.watch_folder or "No folder set")
+
+        # Show folder and exclusions info
+        path_text = profile.watch_folder or "No folder set"
+        if profile.exclude_keywords:
+            keyword_count = len(
+                [k for k in profile.exclude_keywords.split(",") if k.strip()]
+            )
+            path_text += (
+                f" ({keyword_count} exclusion{'s' if keyword_count != 1 else ''})"
+            )
+        self.path_label.setText(path_text)
 
     def set_running(self, is_running: bool):
         """Update UI to reflect running state."""
@@ -1688,9 +1745,9 @@ class FolderMonitorCard(SimpleCardWidget):
         # Collect selected formats
         file_formats = []
         if self.csv_checkbox.isChecked():
-            file_formats.append('csv')
+            file_formats.append("csv")
         if self.xls_checkbox.isChecked():
-            file_formats.append('xls')
+            file_formats.append("xls")
 
         if not file_formats:
             InfoBar.error(
@@ -2020,6 +2077,8 @@ class MonitorPage(QWidget):
             profile.delete_source,
             profile.process_existing,
             profile.auto_detect_dates,
+            profile.file_formats,
+            profile.exclude_keywords,
         )
         thread.log_signal.connect(lambda msg: self._log(f"[{profile.name}] {msg}"))
         thread.status_signal.connect(

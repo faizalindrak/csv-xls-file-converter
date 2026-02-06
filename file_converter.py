@@ -518,16 +518,36 @@ def convert_to_xlsx(
 class ConversionHandler(FileSystemEventHandler):
     """Handle file system events for automatic conversion."""
 
-    def __init__(self, output_folder=None, delete_source=False):
+    def __init__(self, output_folder=None, delete_source=False, exclude_keywords=""):
         super().__init__()
         self.output_folder = output_folder
         self.delete_source = delete_source
+        self.exclude_keywords = exclude_keywords
         self.processing = set()  # Track files being processed to avoid duplicates
+
+    def _matches_exclude_keyword(self, file_path: str) -> bool:
+        """Check if filename contains any exclude keyword."""
+        if not self.exclude_keywords:
+            return False
+
+        filename = os.path.basename(file_path).lower()
+        keywords = [
+            k.strip().lower() for k in self.exclude_keywords.split(",") if k.strip()
+        ]
+
+        for keyword in keywords:
+            if keyword in filename:
+                return True
+        return False
 
     def _should_process(self, file_path):
         """Check if file should be processed."""
         ext = os.path.splitext(file_path)[1].lower()
-        return ext in [".csv", ".xls"]
+        if ext not in [".csv", ".xls"]:
+            return False
+        if self._matches_exclude_keyword(file_path):
+            return False
+        return True
 
     def _get_output_path(self, source_path):
         """Generate output path for converted file."""
@@ -585,13 +605,24 @@ class ConversionHandler(FileSystemEventHandler):
             self._process_file(event.dest_path)
 
 
-def process_existing_files(folder_path, output_folder=None, delete_source=False):
+def process_existing_files(
+    folder_path, output_folder=None, delete_source=False, exclude_keywords=""
+):
     """Process any existing CSV/XLS files in the folder."""
     folder = Path(folder_path)
     files_to_process = list(folder.glob("*.csv")) + list(folder.glob("*.xls"))
 
+    # Filter out excluded files
+    if exclude_keywords:
+        keywords = [k.strip().lower() for k in exclude_keywords.split(",") if k.strip()]
+        files_to_process = [
+            f
+            for f in files_to_process
+            if not any(kw in f.name.lower() for kw in keywords)
+        ]
+
     if not files_to_process:
-        print("No existing CSV/XLS files found.")
+        print("No existing CSV/XLS files found (or all excluded).")
         return
 
     print(f"Found {len(files_to_process)} existing file(s) to convert...")
@@ -618,7 +649,11 @@ def process_existing_files(folder_path, output_folder=None, delete_source=False)
 
 
 def monitor_folder(
-    folder_path, output_folder=None, delete_source=False, process_existing=True
+    folder_path,
+    output_folder=None,
+    delete_source=False,
+    process_existing=True,
+    exclude_keywords="",
 ):
     """
     Monitor a folder for new CSV/XLS files and convert them to XLSX.
@@ -628,6 +663,7 @@ def monitor_folder(
         output_folder: Optional separate folder for output files
         delete_source: If True, delete source files after successful conversion
         process_existing: If True, process existing files before starting monitor
+        exclude_keywords: Comma-separated keywords to exclude files by name
     """
     if not WATCHDOG_AVAILABLE:
         print("Error: watchdog library not found.")
@@ -644,10 +680,12 @@ def monitor_folder(
 
     # Process existing files first
     if process_existing:
-        process_existing_files(folder_path, output_folder, delete_source)
+        process_existing_files(
+            folder_path, output_folder, delete_source, exclude_keywords
+        )
 
     # Set up monitoring
-    event_handler = ConversionHandler(output_folder, delete_source)
+    event_handler = ConversionHandler(output_folder, delete_source, exclude_keywords)
     observer = Observer()
     observer.schedule(event_handler, folder_path, recursive=False)
     observer.start()
@@ -657,6 +695,8 @@ def monitor_folder(
     if output_folder:
         print(f"Output folder: {output_folder}")
     print(f"Delete source after conversion: {delete_source}")
+    if exclude_keywords:
+        print(f"Exclude keywords: {exclude_keywords}")
     print(f"{'=' * 60}")
     print("Press Ctrl+C to stop monitoring...\n")
 
@@ -721,6 +761,11 @@ Examples:
         action="store_true",
         help="Silent mode: no console output, show Windows notification on completion",
     )
+    parser.add_argument(
+        "--exclude",
+        metavar="KEYWORDS",
+        help="Comma-separated keywords to exclude (files with these in name are skipped)",
+    )
 
     args = parser.parse_args()
 
@@ -731,6 +776,7 @@ Examples:
             output_folder=args.output,
             delete_source=args.delete_source,
             process_existing=not args.skip_existing,
+            exclude_keywords=args.exclude or "",
         )
         return
 
