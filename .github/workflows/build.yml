@@ -1,0 +1,190 @@
+name: Build Windows Releases
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (leave empty to use _version.py)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --no-cache-dir -r requirements.txt
+          python -m pip install --no-cache-dir pyinstaller
+
+      - name: Get version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event.inputs.version }}" -ne "") {
+            $version = "${{ github.event.inputs.version }}"
+          } elseif ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}" -replace '^v', ''
+          } else {
+            $version = (Select-String -Path "_version.py" -Pattern '__version__ = "([^"]+)"').Matches.Groups[1].Value
+          }
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Version: $version"
+
+      - name: Update version in files
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          
+          # Update _version.py
+          (Get-Content _version.py) -replace '__version__ = "[^"]+"', "__version__ = `"$version`"" | Set-Content _version.py
+          
+          # Update installer.iss
+          (Get-Content installer.iss) -replace '#define MyAppVersion "[^"]+"', "#define MyAppVersion `"$version`"" | Set-Content installer.iss
+
+      - name: Build executable
+        run: |
+          pyinstaller --clean --noconfirm CSV-XLS-Converter.spec
+          
+      - name: Prepare portable executable
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          # Copy for portable release (with version suffix)
+          Copy-Item -Path "dist\CSV-XLS-Converter.exe" -Destination "dist\CSV-XLS-Converter-$version-Portable.exe"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          # Download Inno Setup
+          $url = "https://jrsoftware.org/download.php/is.exe"
+          $installer = "$env:TEMP\innosetup.exe"
+          Invoke-WebRequest -Uri $url -OutFile $installer
+          
+          # Silent install
+          Start-Process -FilePath $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          
+          # Add to PATH
+          $innoPath = "C:\Program Files (x86)\Inno Setup 6"
+          echo "$innoPath" >> $env:GITHUB_PATH
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          # Installer uses dist\CSV-XLS-Converter.exe (without version suffix)
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+
+      - name: List build outputs
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path dist -Recurse | Format-Table Name, Length
+
+      - name: Upload portable executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-exe
+          path: dist/CSV-XLS-Converter-*-Portable.exe
+          retention-days: 30
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/CSV-XLS-Converter-Setup-*.exe
+          retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout for changelog
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            CHANGELOG.md
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f -name "*.exe"
+
+      - name: Extract changelog for version
+        id: changelog
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix
+          
+          # Extract section for this version from CHANGELOG.md
+          if [ -f CHANGELOG.md ]; then
+            # Extract content between this version header and next version header
+            NOTES=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+            
+            if [ -n "$NOTES" ]; then
+              echo "Found changelog for version ${VERSION}"
+              # Save to file for multi-line support
+              echo "$NOTES" > release_notes.md
+            else
+              echo "No changelog found for version ${VERSION}, using auto-generated notes"
+              echo "" > release_notes.md
+            fi
+          else
+            echo "CHANGELOG.md not found, using auto-generated notes"
+            echo "" > release_notes.md
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if release exists and delete it
+          if gh release view ${{ github.ref_name }} --repo ${{ github.repository }} > /dev/null 2>&1; then
+            echo "Deleting existing release..."
+            gh release delete ${{ github.ref_name }} --repo ${{ github.repository }} --yes
+          fi
+          
+          # Determine if prerelease
+          PRERELEASE_FLAG=""
+          if [[ "${{ github.ref_name }}" == *"-"* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          
+          # Check if we have custom release notes
+          if [ -s release_notes.md ]; then
+            # Use custom changelog notes
+            gh release create ${{ github.ref_name }} \
+              --repo ${{ github.repository }} \
+              --title "Release ${{ github.ref_name }}" \
+              --notes-file release_notes.md \
+              $PRERELEASE_FLAG \
+              artifacts/portable-exe/*.exe \
+              artifacts/installer/*.exe
+          else
+            # Fallback to auto-generated notes
+            gh release create ${{ github.ref_name }} \
+              --repo ${{ github.repository }} \
+              --title "Release ${{ github.ref_name }}" \
+              --generate-notes \
+              $PRERELEASE_FLAG \
+              artifacts/portable-exe/*.exe \
+              artifacts/installer/*.exe
+          fi

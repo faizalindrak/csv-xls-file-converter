@@ -52,7 +52,8 @@ coverage.xml
 
 # PyInstaller
 *.manifest
-*.spec
+# Keep CSV-XLS-Converter.spec for build
+!CSV-XLS-Converter.spec
 
 # OS specific
 .DS_Store
@@ -65,3 +66,6 @@ nul
 
 # Auto Claude data directory
 .auto-claude/
+
+# Test scripts
+test_history.py
