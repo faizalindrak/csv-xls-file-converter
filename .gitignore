@@ -62,3 +62,6 @@ nul
 
 # Linter
 .ruff_cache/
+
+# Auto Claude data directory
+.auto-claude/

@@ -8,6 +8,11 @@ from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Optional, List
 
+# Ensure we can import from the current directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
 from _version import __version__
 
 from PySide6.QtWidgets import (
@@ -50,11 +55,6 @@ from qfluentwidgets import (
 )
 
 # Import converter functions
-# We need to ensure we can import from the current directory
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.append(current_dir)
-
 from file_converter import convert_to_xlsx, WATCHDOG_AVAILABLE
 
 if WATCHDOG_AVAILABLE:
