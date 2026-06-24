@@ -4,9 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.24] - 2026-06-24
+
 ### Changed
 - Release builds now use the Rust workspace with Slint GUI and Rust CLI executables instead of PyInstaller.
 - GitHub Actions and `build.bat` now build and package Cargo release artifacts.
+
+### Added
+- Native Browse buttons for GUI file and folder path fields in single-file conversion and monitor profile setup.
+
+### Fixed
+- Rust GUI drag-and-drop now accepts CSV, XLS, and XLSX files in the single-file conversion screen.
+- Rust GUI executable now uses the Windows GUI subsystem so opening the app no longer shows a console window first.
+- Light-theme path fields and primary actions now use higher-contrast controls in the Slint interface.
 
 ## [0.4.23] - 2026-06-24
 

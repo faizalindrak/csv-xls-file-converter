@@ -10,13 +10,14 @@ A quiet Windows utility for repetitive file work. It should feel precise, sturdy
 
 | Role | Token | Light | Dark | Usage |
 |------|-------|-------|------|-------|
-| Surface/primary | `--surface-primary` | `#F7F8FA` | `#111315` | Window background |
+| Surface/primary | `--surface-primary` | `#EEF2F7` | `#111315` | Window background |
 | Surface/secondary | `--surface-secondary` | `#FFFFFF` | `#191C1F` | Panels and list rows |
 | Surface/elevated | `--surface-elevated` | `#FFFFFF` | `#202428` | Dialogs and popovers |
 | Text/primary | `--text-primary` | `#1B1F24` | `#F2F4F7` | Main text |
-| Text/secondary | `--text-secondary` | `#5D6673` | `#B4BCC7` | Labels and metadata |
+| Text/secondary | `--text-secondary` | `#4B5563` | `#B4BCC7` | Labels and metadata |
 | Text/tertiary | `--text-tertiary` | `#8B95A3` | `#7C8794` | Disabled and hints |
 | Border/default | `--border-default` | `#D8DEE6` | `#30363D` | Controls and dividers |
+| Border/strong | `--border-strong` | `#B8C2CF` | `#47515D` | Inputs and primary work controls |
 | Border/subtle | `--border-subtle` | `#E8ECF1` | `#252A30` | Soft separators |
 | Accent/primary | `--accent-primary` | `#2563EB` | `#5B8DEF` | Primary actions and focus |
 | Accent/hover | `--accent-hover` | `#1D4ED8` | `#7AA2F7` | Primary hover |
@@ -85,9 +86,10 @@ All spacing derives from 4px.
 ### Path Picker
 
 - **Structure**: read-only or editable path field plus browse button.
-- **States**: default, focus, disabled, invalid.
+- **States**: default, focus, disabled, invalid. Default borders use `--border-strong`; focus uses `--accent-primary`.
 - **Spacing**: `--space-2` gap between field and button.
 - **Accessibility**: browse button names the path it selects.
+- **Browse action**: file and folder path fields include a right-aligned secondary `Browse` button using the same 40px control height as the input.
 
 ### Status Row
 

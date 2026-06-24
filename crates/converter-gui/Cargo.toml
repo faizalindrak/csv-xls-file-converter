@@ -14,7 +14,11 @@ app-state = { path = "../app-state" }
 converter-cli = { path = "../converter-cli" }
 converter-core = { path = "../converter-core" }
 platform-windows = { path = "../platform-windows" }
+rfd.workspace = true
 slint.workspace = true
 
 [build-dependencies]
 slint-build.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
