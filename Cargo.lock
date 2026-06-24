@@ -966,6 +966,7 @@ dependencies = [
  "encoding_rs",
  "regex",
  "rust_xlsxwriter",
+ "tempfile",
  "thiserror 2.0.18",
 ]
 

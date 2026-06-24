@@ -11,3 +11,6 @@ encoding_rs.workspace = true
 regex.workspace = true
 rust_xlsxwriter.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
