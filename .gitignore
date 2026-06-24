@@ -64,5 +64,8 @@ nul
 # Linter
 .ruff_cache/
 
+# Auto Claude data directory
+.auto-claude/
+
 # Test scripts
 test_history.py
