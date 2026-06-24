@@ -141,7 +141,10 @@ impl MonitorManager {
 
         let mut to_stop = Vec::new();
         {
-            let state = self.state.lock().expect("monitor manager state lock poisoned");
+            let state = self
+                .state
+                .lock()
+                .expect("monitor manager state lock poisoned");
             for id in state.workers.keys() {
                 if !desired_ids.contains(id) {
                     to_stop.push(id.clone());
@@ -153,7 +156,10 @@ impl MonitorManager {
         }
 
         for profile in profiles.iter().filter(|profile| profile.enabled) {
-            let mut state = self.state.lock().expect("monitor manager state lock poisoned");
+            let mut state = self
+                .state
+                .lock()
+                .expect("monitor manager state lock poisoned");
             if state.workers.contains_key(&profile.id) {
                 continue;
             }
@@ -177,7 +183,10 @@ impl MonitorManager {
 
     fn stop_worker(&self, profile_id: &str) {
         let handle = {
-            let mut state = self.state.lock().expect("monitor manager state lock poisoned");
+            let mut state = self
+                .state
+                .lock()
+                .expect("monitor manager state lock poisoned");
             state.workers.remove(profile_id)
         };
 
@@ -192,7 +201,10 @@ impl MonitorManager {
 
     fn shutdown_all(&self) {
         let ids = {
-            let state = self.state.lock().expect("monitor manager state lock poisoned");
+            let state = self
+                .state
+                .lock()
+                .expect("monitor manager state lock poisoned");
             state.workers.keys().cloned().collect::<Vec<_>>()
         };
         for id in ids {
@@ -246,7 +258,10 @@ impl MonitorRuntime {
     fn run_inner(&self) -> Result<(), String> {
         let watch_folder = PathBuf::from(self.profile.watch_folder.trim());
         if !watch_folder.is_dir() {
-            return Err(format!("watch folder not found: {}", watch_folder.display()));
+            return Err(format!(
+                "watch folder not found: {}",
+                watch_folder.display()
+            ));
         }
 
         let allowed_formats = normalized_formats(&self.profile.file_formats);
@@ -348,14 +363,23 @@ impl MonitorRuntime {
         ) && !should_skip_existing_output(path, output_folder)
     }
 
-    fn process_queued_file(&self, source_path: &Path, output_folder: Option<&Path>, allowed_formats: &[String]) {
+    fn process_queued_file(
+        &self,
+        source_path: &Path,
+        output_folder: Option<&Path>,
+        allowed_formats: &[String],
+    ) {
         if self.stop.load(Ordering::SeqCst) {
             return;
         }
 
         let source = source_path.to_path_buf();
         let source_string = source.to_string_lossy().to_string();
-        if !should_process(&source_string, allowed_formats, &self.profile.exclude_keywords) {
+        if !should_process(
+            &source_string,
+            allowed_formats,
+            &self.profile.exclude_keywords,
+        ) {
             return;
         }
 
@@ -419,11 +443,7 @@ impl MonitorRuntime {
                         ));
                     }
                     Err(error) => {
-                        self.update_history_entry(
-                            processing_index,
-                            "failed",
-                            error.to_string(),
-                        );
+                        self.update_history_entry(processing_index, "failed", error.to_string());
                         self.push_status_message(format!(
                             "Monitor error ({}): failed to convert {}",
                             self.profile_label(),
@@ -543,7 +563,7 @@ fn wire_conversion(app: &AppWindow, context: Arc<ControllerContext>) {
                     } else {
                         (true, String::new())
                     };
-                    
+
                     append_history_item(ConversionHistoryItem {
                         source_path: input.display().to_string(),
                         output_path: path.display().to_string(),
@@ -555,7 +575,7 @@ fn wire_conversion(app: &AppWindow, context: Arc<ControllerContext>) {
                         timestamp: current_timestamp(),
                         error_message: deletion_error_msg.clone(),
                     });
-                    
+
                     if deletion_success {
                         let msg = format!("Converted: {}", path.display());
                         context_clone.update_status_message(msg.clone());
@@ -1067,7 +1087,11 @@ fn is_file_ready(path: &Path) -> bool {
     };
     let size_before = metadata_before.len();
 
-    if OpenOptions::new().read(true).write(true).open(path).is_err()
+    if OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .is_err()
         && OpenOptions::new().read(true).open(path).is_err()
     {
         return false;

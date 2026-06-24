@@ -29,8 +29,11 @@ pub fn set_auto_startup(enable: bool, executable_path: &str) -> Result<(), crate
         .map_err(registry_error)?;
 
     if enable {
-        key.set_value(startup_registry_name(), &quoted_executable_path(executable_path))
-            .map_err(registry_error)?;
+        key.set_value(
+            startup_registry_name(),
+            &quoted_executable_path(executable_path),
+        )
+        .map_err(registry_error)?;
     } else {
         match key.delete_value(startup_registry_name()) {
             Ok(()) => {}
@@ -43,10 +46,7 @@ pub fn set_auto_startup(enable: bool, executable_path: &str) -> Result<(), crate
 }
 
 #[cfg(not(windows))]
-pub fn set_auto_startup(
-    _enable: bool,
-    _executable_path: &str,
-) -> Result<(), crate::PlatformError> {
+pub fn set_auto_startup(_enable: bool, _executable_path: &str) -> Result<(), crate::PlatformError> {
     Err(crate::PlatformError::Message(
         "Auto-startup registration is only available on Windows".to_string(),
     ))
@@ -83,10 +83,14 @@ pub fn register_context_menu(executable_path: &str) -> Result<(), crate::Platfor
     let command = context_menu_command(executable_path);
 
     for reg_path in all_context_menu_paths() {
-        let (key, _) = current_user.create_subkey(reg_path).map_err(registry_error)?;
-        key.set_value("", &CONTEXT_MENU_TEXT).map_err(registry_error)?;
+        let (key, _) = current_user
+            .create_subkey(reg_path)
+            .map_err(registry_error)?;
+        key.set_value("", &CONTEXT_MENU_TEXT)
+            .map_err(registry_error)?;
         key.set_value("Position", &"Top").map_err(registry_error)?;
-        key.set_value("Icon", &executable_path).map_err(registry_error)?;
+        key.set_value("Icon", &executable_path)
+            .map_err(registry_error)?;
 
         let (command_key, _) = current_user
             .create_subkey(format!(r"{reg_path}\command"))
@@ -194,8 +198,12 @@ mod tests {
     fn context_menu_targets_csv_and_xls_paths() {
         let paths = all_context_menu_paths().collect::<Vec<_>>();
 
-        assert!(paths.iter().any(|path| path.contains(r".csv\shell\ConvertToXLSX")));
-        assert!(paths.iter().any(|path| path.contains(r".xls\shell\ConvertToXLSX")));
+        assert!(paths
+            .iter()
+            .any(|path| path.contains(r".csv\shell\ConvertToXLSX")));
+        assert!(paths
+            .iter()
+            .any(|path| path.contains(r".xls\shell\ConvertToXLSX")));
         assert_eq!(paths.len(), 4);
         assert_eq!(CONTEXT_MENU_NAME, "ConvertToXLSX");
     }

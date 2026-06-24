@@ -68,7 +68,7 @@ pub fn discover_existing_files(
     exclude_keywords: &str,
 ) -> std::io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
-    
+
     fn walk_directory(
         dir: &Path,
         allowed_formats: &[String],
@@ -78,8 +78,10 @@ pub fn discover_existing_files(
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            
-            if path.is_file() && should_process(&path.to_string_lossy(), allowed_formats, exclude_keywords) {
+
+            if path.is_file()
+                && should_process(&path.to_string_lossy(), allowed_formats, exclude_keywords)
+            {
                 files.push(path);
             } else if path.is_dir() {
                 walk_directory(&path, allowed_formats, exclude_keywords, files)?;
@@ -87,7 +89,7 @@ pub fn discover_existing_files(
         }
         Ok(())
     }
-    
+
     walk_directory(folder_path, allowed_formats, exclude_keywords, &mut files)?;
     files.sort();
     Ok(files)

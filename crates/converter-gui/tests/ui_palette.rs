@@ -27,8 +27,7 @@ fn convert_screen_uses_high_contrast_fixed_height_controls() {
     assert!(ui_source.contains("component TextField inherits Rectangle"));
     assert!(ui_source.contains("border-color: input.has-focus ? COLOR_PRIMARY : COLOR_BORDER"));
     assert!(ui_source.contains("component PrimaryButton inherits Rectangle"));
-    assert!(ui_source
-        .contains("background: touch.has-hover ? COLOR_PRIMARY_LIGHT : COLOR_PRIMARY"));
+    assert!(ui_source.contains("background: touch.has-hover ? COLOR_PRIMARY_LIGHT : COLOR_PRIMARY"));
     assert!(ui_source.contains("color: COLOR_CARD"));
     assert!(ui_source.contains("PrimaryButton { text: \"Convert to XLSX\""));
 

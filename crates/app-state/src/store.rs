@@ -73,10 +73,7 @@ pub fn load_history_from(path: PathBuf) -> Result<Vec<ConversionHistoryItem>, St
     serde_json::from_str(&text).map_err(|source| StateError::Json { path, source })
 }
 
-pub fn save_history_to(
-    path: PathBuf,
-    history: &[ConversionHistoryItem],
-) -> Result<(), StateError> {
+pub fn save_history_to(path: PathBuf, history: &[ConversionHistoryItem]) -> Result<(), StateError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|source| StateError::Io {
             path: parent.to_path_buf(),
