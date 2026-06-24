@@ -13,3 +13,6 @@ app-state = { path = "../app-state" }
 clap.workspace = true
 converter-core = { path = "../converter-core" }
 platform-windows = { path = "../platform-windows" }
+
+[dev-dependencies]
+tempfile.workspace = true

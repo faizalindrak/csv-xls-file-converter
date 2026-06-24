@@ -955,6 +955,7 @@ dependencies = [
  "clap",
  "converter-core",
  "platform-windows",
+ "tempfile",
 ]
 
 [[package]]
