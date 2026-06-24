@@ -1,24 +1,213 @@
-import { VerticalBox } from "std-widgets.slint";
+import { Button, CheckBox, LineEdit, TabWidget } from "std-widgets.slint";
+
+export struct ProfileRow {
+    id: string,
+    name: string,
+    folder: string,
+    enabled: bool,
+}
+
+export struct HistoryRow {
+    source: string,
+    output: string,
+    status: string,
+}
+
+component SectionTitle inherits Text {
+    font-size: 22px;
+    font-weight: 600;
+    color: #1B1F24;
+}
+
+component Label inherits Text {
+    font-size: 13px;
+    color: #5D6673;
+}
+
+component StatusText inherits Text {
+    font-size: 13px;
+    color: #5D6673;
+}
+
+component PathRow inherits Rectangle {
+    in-out property <string> value;
+    in property <string> label;
+    in property <string> placeholder;
+    height: 64px;
+    background: transparent;
+
+    VerticalLayout {
+        spacing: 6px;
+        Label { text: root.label; }
+        LineEdit {
+            text <=> root.value;
+            placeholder-text: root.placeholder;
+        }
+    }
+}
+
+component ProfileListRow inherits Rectangle {
+    in property <ProfileRow> profile;
+    callback delete-profile(string);
+    callback toggle-profile(string, bool);
+
+    height: 48px;
+    border-width: 1px;
+    border-color: #E8ECF1;
+    border-radius: 8px;
+    background: #FFFFFF;
+
+    HorizontalLayout {
+        padding: 10px;
+        spacing: 10px;
+        CheckBox {
+            checked: root.profile.enabled;
+            changed checked => { root.toggle-profile(root.profile.id, self.checked); }
+        }
+        Text {
+            text: root.profile.name;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1B1F24;
+            min-width: 160px;
+        }
+        Text {
+            text: root.profile.folder;
+            font-size: 13px;
+            color: #5D6673;
+            horizontal-stretch: 1;
+        }
+        Button {
+            text: "Delete";
+            clicked => { root.delete-profile(root.profile.id); }
+        }
+    }
+}
+
+component HistoryListRow inherits Rectangle {
+    in property <HistoryRow> item;
+
+    height: 48px;
+    border-width: 1px;
+    border-color: #E8ECF1;
+    border-radius: 8px;
+    background: #FFFFFF;
+
+    HorizontalLayout {
+        padding: 10px;
+        spacing: 12px;
+        Text { text: root.item.status; font-size: 13px; min-width: 80px; color: #2563EB; }
+        Text { text: root.item.source; font-size: 13px; color: #1B1F24; horizontal-stretch: 1; }
+        Text { text: root.item.output; font-size: 13px; color: #5D6673; horizontal-stretch: 1; }
+    }
+}
 
 export component AppWindow inherits Window {
+    in-out property <string> input-path;
+    in-out property <string> output-folder;
+    in-out property <bool> remove-backticks;
+    in-out property <bool> auto-detect-dates;
+    in-out property <bool> delete-source;
+    in-out property <string> status-message: "Ready";
+
+    in property <[ProfileRow]> profiles;
+    in property <[HistoryRow]> history-items;
+    in-out property <string> profile-name;
+    in-out property <string> watch-folder;
+    in-out property <string> monitor-output-folder;
+    in-out property <bool> process-existing: true;
+    in-out property <bool> monitor-delete-source;
+    in-out property <bool> monitor-auto-detect-dates;
+    in-out property <bool> monitor-csv-enabled: true;
+    in-out property <bool> monitor-xls-enabled: true;
+    in-out property <string> exclude-keywords;
+    in-out property <bool> auto-startup-enabled;
+    in-out property <bool> context-menu-enabled;
+
+    callback convert-file();
+    callback add-profile();
+    callback delete-profile(string);
+    callback toggle-profile(string, bool);
+    callback save-settings();
+
     title: "CSV/XLS Converter";
-    width: 960px;
-    height: 640px;
+    width: 1040px;
+    height: 720px;
+    background: #F7F8FA;
 
-    VerticalBox {
-        alignment: start;
-        padding: 24px;
-
-        Text {
-            text: "CSV/XLS Converter";
-            font-size: 28px;
-            font-weight: 650;
+    TabWidget {
+        Tab {
+            title: "Convert";
+            VerticalLayout {
+                padding: 24px;
+                spacing: 12px;
+                SectionTitle { text: "Convert Single File"; }
+                PathRow {
+                    label: "Input file";
+                    placeholder: "Paste a CSV, XLS, or XLSX path";
+                    value <=> root.input-path;
+                }
+                PathRow {
+                    label: "Output folder";
+                    placeholder: "Optional folder path";
+                    value <=> root.output-folder;
+                }
+                HorizontalLayout {
+                    spacing: 16px;
+                    CheckBox { text: "Remove backticks"; checked <=> root.remove-backticks; }
+                    CheckBox { text: "Auto-detect dates"; checked <=> root.auto-detect-dates; }
+                    CheckBox { text: "Delete original"; checked <=> root.delete-source; }
+                }
+                Button { text: "Convert to XLSX"; clicked => { root.convert-file(); } }
+                StatusText { text: root.status-message; }
+            }
         }
-
-        Text {
-            text: "Rust/Slint workspace scaffold";
-            color: #5D6673;
-            font-size: 14px;
+        Tab {
+            title: "Monitor";
+            VerticalLayout {
+                padding: 24px;
+                spacing: 12px;
+                SectionTitle { text: "Monitor Profiles"; }
+                PathRow { label: "Profile name"; placeholder: "Profile name"; value <=> root.profile-name; }
+                PathRow { label: "Watch folder"; placeholder: "Folder to monitor"; value <=> root.watch-folder; }
+                PathRow { label: "Output folder"; placeholder: "Optional output folder"; value <=> root.monitor-output-folder; }
+                HorizontalLayout {
+                    spacing: 16px;
+                    CheckBox { text: "Process existing"; checked <=> root.process-existing; }
+                    CheckBox { text: "Delete source"; checked <=> root.monitor-delete-source; }
+                    CheckBox { text: "Auto-detect dates"; checked <=> root.monitor-auto-detect-dates; }
+                    CheckBox { text: "CSV"; checked <=> root.monitor-csv-enabled; }
+                    CheckBox { text: "XLS"; checked <=> root.monitor-xls-enabled; }
+                }
+                LineEdit { text <=> root.exclude-keywords; placeholder-text: "Exclude keywords, comma-separated"; }
+                Button { text: "Add Profile"; clicked => { root.add-profile(); } }
+                for profile in root.profiles: ProfileListRow {
+                    profile: profile;
+                    delete-profile(id) => { root.delete-profile(id); }
+                    toggle-profile(id, enabled) => { root.toggle-profile(id, enabled); }
+                }
+            }
+        }
+        Tab {
+            title: "History";
+            VerticalLayout {
+                padding: 24px;
+                spacing: 10px;
+                SectionTitle { text: "Recent Conversions"; }
+                for item in root.history-items: HistoryListRow { item: item; }
+            }
+        }
+        Tab {
+            title: "Settings";
+            VerticalLayout {
+                padding: 24px;
+                spacing: 12px;
+                SectionTitle { text: "Settings"; }
+                CheckBox { text: "Start with Windows"; checked <=> root.auto-startup-enabled; }
+                CheckBox { text: "Explorer context menu"; checked <=> root.context-menu-enabled; }
+                Button { text: "Save Settings"; clicked => { root.save-settings(); } }
+                StatusText { text: "Settings are stored in the existing AppData profile file."; }
+            }
         }
     }
 }
