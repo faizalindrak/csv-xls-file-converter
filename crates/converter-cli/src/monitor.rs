@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
-use converter_core::{convert_to_xlsx, ConvertOptions};
+use crate::conversion::convert_file_to_xlsx;
+use converter_core::ConvertOptions;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -148,7 +149,7 @@ fn process_file(source_path: &Path, config: &MonitorConfig) -> Result<(), String
     }
 
     println!("Converting: {}", source_path.display());
-    convert_to_xlsx(
+    convert_file_to_xlsx(
         source_path,
         Some(&output_path),
         ConvertOptions {

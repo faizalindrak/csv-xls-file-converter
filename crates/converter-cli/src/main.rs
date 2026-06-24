@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
 use clap::{CommandFactory, Parser};
+use converter_cli::conversion::convert_file_to_xlsx;
 use converter_cli::monitor::{monitor_folder, MonitorConfig};
-use converter_core::{convert_to_xlsx, ConvertOptions};
+use converter_core::ConvertOptions;
+use platform_windows::show_notification;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -69,7 +71,7 @@ fn run(args: Args) -> i32 {
         return 1;
     }
 
-    let result = convert_to_xlsx(
+    let result = convert_file_to_xlsx(
         &input,
         args.output.as_deref(),
         ConvertOptions {
@@ -80,13 +82,21 @@ fn run(args: Args) -> i32 {
 
     match result {
         Ok(path) => {
-            if !args.silent {
+            if args.silent {
+                let _ = show_notification(
+                    "CSV-XLS Converter",
+                    &format!("Converted to {}", path.display()),
+                );
+            } else {
                 println!("Successfully converted to: {}", path.display());
             }
             0
         }
         Err(error) => {
-            if !args.silent {
+            if args.silent {
+                let _ =
+                    show_notification("CSV-XLS Converter", &format!("Conversion failed: {error}"));
+            } else {
                 eprintln!("Conversion failed: {error}");
             }
             1

@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 app-state = { path = "../app-state" }
+converter-cli = { path = "../converter-cli" }
 converter-core = { path = "../converter-core" }
 platform-windows = { path = "../platform-windows" }
 slint.workspace = true

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Release builds now use the Rust workspace with Slint GUI and Rust CLI executables instead of PyInstaller.
+- GitHub Actions and `build.bat` now build and package Cargo release artifacts.
+
 ## [0.4.23] - 2026-06-24
 
 ### Fixed

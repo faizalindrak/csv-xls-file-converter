@@ -18,6 +18,7 @@ clap.workspace = true
 converter-core = { path = "../converter-core" }
 notify.workspace = true
 platform-windows = { path = "../platform-windows" }
+thiserror.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

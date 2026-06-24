@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 
 use app_state::{
@@ -145,7 +145,7 @@ fn refresh_history(app: &AppWindow) {
     }
 }
 
-fn output_path(input: &PathBuf, output_folder: &str) -> Option<PathBuf> {
+fn output_path(input: &Path, output_folder: &str) -> Option<PathBuf> {
     if output_folder.trim().is_empty() {
         return None;
     }

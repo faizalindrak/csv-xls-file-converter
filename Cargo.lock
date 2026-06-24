@@ -957,6 +957,7 @@ dependencies = [
  "notify",
  "platform-windows",
  "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -977,6 +978,7 @@ name = "converter-gui"
 version = "0.4.23"
 dependencies = [
  "app-state",
+ "converter-cli",
  "converter-core",
  "platform-windows",
  "slint",
