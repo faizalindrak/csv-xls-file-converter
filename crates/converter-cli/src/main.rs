@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{CommandFactory, Parser};
+use converter_cli::monitor::{monitor_folder, MonitorConfig};
 use converter_core::{convert_to_xlsx, ConvertOptions};
 
 #[derive(Debug, Parser)]
@@ -34,10 +35,23 @@ fn main() {
 
 fn run(args: Args) -> i32 {
     if let Some(folder) = args.monitor {
-        if !args.silent {
-            eprintln!("Monitor mode is not implemented yet: {}", folder.display());
-        }
-        return 1;
+        let config = MonitorConfig {
+            folder_path: folder,
+            output_folder: args.output,
+            delete_source: args.delete_source,
+            process_existing: !args.skip_existing,
+            file_formats: vec!["csv".to_string(), "xls".to_string()],
+            exclude_keywords: args.exclude.unwrap_or_default(),
+        };
+        return match monitor_folder(config) {
+            Ok(()) => 0,
+            Err(error) => {
+                if !args.silent {
+                    eprintln!("Monitor failed: {error}");
+                }
+                1
+            }
+        };
     }
 
     let Some(input) = args.input else {
