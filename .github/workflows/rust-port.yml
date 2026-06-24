@@ -2,6 +2,10 @@ name: Rust Port Build
 
 on:
   push:
+    branches:
+      - "**"
+    tags:
+      - "rust-port-v*"
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
@@ -20,6 +24,19 @@ on:
       - "crates/**"
       - ".github/workflows/rust-port.yml"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional release tag to publish, for example rust-port-v0.4.23"
+        required: false
+        type: string
+      prerelease:
+        description: "Mark manually published release as a prerelease"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
 
 jobs:
   windows:
@@ -68,3 +85,63 @@ jobs:
           }
 
           $files | Select-Object Name, Length
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/rust-port-v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $prerelease = $true
+
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "${{ inputs.release_tag }}"
+            $prerelease = [System.Boolean]::Parse("${{ inputs.prerelease }}")
+          }
+
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw "release_tag is required when publishing a release manually"
+          }
+
+          if ($tag -notmatch "^rust-port-v[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.]+)?$") {
+            throw "Release tag must look like rust-port-v0.4.23 or rust-port-v0.4.23-preview.1"
+          }
+
+          $runUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          $releaseUrl = "https://github.com/${{ github.repository }}/releases/tag/$tag"
+          $notesPath = Join-Path $env:RUNNER_TEMP "rust-port-release-notes.md"
+
+          $notes = @(
+            "Rust port Windows build.",
+            "",
+            "- Workflow run: $runUrl",
+            "- Commit: $env:GITHUB_SHA",
+            "",
+            "Downloads:",
+            "- CSV-XLS-Converter.exe",
+            "- CSV-XLS-Converter-CLI.exe"
+          )
+          $notes | Set-Content -Path $notesPath
+
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag dist/CSV-XLS-Converter.exe dist/CSV-XLS-Converter-CLI.exe --clobber --repo "${{ github.repository }}"
+          } else {
+            $args = @(
+              "release", "create", $tag,
+              "dist/CSV-XLS-Converter.exe",
+              "dist/CSV-XLS-Converter-CLI.exe",
+              "--repo", "${{ github.repository }}",
+              "--target", $env:GITHUB_SHA,
+              "--title", "Rust Port $tag",
+              "--notes-file", $notesPath
+            )
+            if ($prerelease) {
+              $args += "--prerelease"
+            }
+            gh @args
+          }
+
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "Download release assets: [$tag]($releaseUrl)" >> $env:GITHUB_STEP_SUMMARY
