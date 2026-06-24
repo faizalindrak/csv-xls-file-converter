@@ -5,7 +5,7 @@ fn standard_widgets_use_light_palette_when_window_surface_is_light() {
 
     // When std-widgets are used inside that window
     let uses_standard_widgets = ui_source.contains("\"std-widgets.slint\"");
-    let uses_light_window_surface = ui_source.contains("background: COLOR_BACKGROUND");
+    let uses_light_window_surface = ui_source.contains("background: Theme.background");
 
     // Then their palette must be pinned to light so text stays readable on light surfaces.
     assert!(uses_standard_widgets);
@@ -25,10 +25,10 @@ fn convert_screen_uses_high_contrast_fixed_height_controls() {
     // Then its contrast-critical controls must come from declared design tokens.
     assert!(design_system.contains("`--border-strong`"));
     assert!(ui_source.contains("component TextField inherits Rectangle"));
-    assert!(ui_source.contains("border-color: input.has-focus ? COLOR_PRIMARY : COLOR_BORDER"));
+    assert!(ui_source.contains("border-color: input.has-focus ? Theme.primary : Theme.border"));
     assert!(ui_source.contains("component PrimaryButton inherits Rectangle"));
-    assert!(ui_source.contains("background: touch.has-hover ? COLOR_PRIMARY_LIGHT : COLOR_PRIMARY"));
-    assert!(ui_source.contains("color: COLOR_CARD"));
+    assert!(ui_source.contains("background: touch.has-hover ? Theme.primary-light : Theme.primary"));
+    assert!(ui_source.contains("color: Theme.card"));
     assert!(ui_source.contains("PrimaryButton { text: \"Convert to XLSX\""));
 
     // And fixed-height controls must not stretch into low-contrast blank panels.

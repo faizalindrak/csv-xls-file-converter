@@ -14,64 +14,66 @@ export struct HistoryRow {
     error-message: string,
 }
 
-const COLOR_PRIMARY: color = #2563EB;
-const COLOR_PRIMARY_DARK: color = #1D4ED8;
-const COLOR_PRIMARY_LIGHT: color = #3B82F6;
-const COLOR_SUCCESS: color = #10B981;
-const COLOR_WARNING: color = #F59E0B;
-const COLOR_ERROR: color = #EF4444;
-const COLOR_BACKGROUND: color = #F8FAFC;
-const COLOR_CARD: color = #FFFFFF;
-const COLOR_TEXT_PRIMARY: color = #1E293B;
-const COLOR_TEXT_SECONDARY: color = #64748B;
-const COLOR_BORDER: color = #E2E8F0;
-const COLOR_HOVER: color = rgba(37, 99, 235, 8%);
-const COLOR_ACTIVE: color = rgba(37, 99, 235, 12%);
-const SPACING_XS: length = 4px;
-const SPACING_SM: length = 8px;
-const SPACING_MD: length = 16px;
-const SPACING_LG: length = 24px;
-const SPACING_XL: length = 32px;
-const RADIUS_SM: length = 6px;
-const RADIUS_MD: length = 8px;
-const RADIUS_LG: length = 12px;
+global Theme {
+    out property <color> primary: #2563EB;
+    out property <color> primary-dark: #1D4ED8;
+    out property <color> primary-light: #3B82F6;
+    out property <color> success: #10B981;
+    out property <color> warning: #F59E0B;
+    out property <color> error: #EF4444;
+    out property <color> background: #F8FAFC;
+    out property <color> card: #FFFFFF;
+    out property <color> text-primary: #1E293B;
+    out property <color> text-secondary: #64748B;
+    out property <color> border: #E2E8F0;
+    out property <color> hover: rgba(37, 99, 235, 8%);
+    out property <color> active: rgba(37, 99, 235, 12%);
+    out property <length> spacing-xs: 4px;
+    out property <length> spacing-sm: 8px;
+    out property <length> spacing-md: 16px;
+    out property <length> spacing-lg: 24px;
+    out property <length> spacing-xl: 32px;
+    out property <length> radius-sm: 6px;
+    out property <length> radius-md: 8px;
+    out property <length> radius-lg: 12px;
+}
 
 component SectionTitle inherits Text {
     font-size: 24px;
     font-weight: 700;
-    color: COLOR_TEXT_PRIMARY;
+    color: Theme.text-primary;
 }
 
 component Subtitle inherits Text {
     font-size: 15px;
     font-weight: 500;
-    color: COLOR_TEXT_PRIMARY;
+    color: Theme.text-primary;
 }
 
 component Label inherits Text {
     font-size: 12px;
     font-weight: 500;
-    color: COLOR_TEXT_SECONDARY;
+    color: Theme.text-secondary;
 }
 
 component StatusText inherits Text {
     font-size: 13px;
-    color: COLOR_TEXT_SECONDARY;
+    color: Theme.text-secondary;
 }
 
 component SuccessText inherits Text {
     font-size: 13px;
-    color: COLOR_SUCCESS;
+    color: Theme.success;
 }
 
 component ErrorText inherits Text {
     font-size: 13px;
-    color: COLOR_ERROR;
+    color: Theme.error;
 }
 
 component WarningText inherits Text {
     font-size: 13px;
-    color: COLOR_WARNING;
+    color: Theme.warning;
 }
 
 component TextField inherits Rectangle {
@@ -82,9 +84,9 @@ component TextField inherits Rectangle {
     height: 44px;
     vertical-stretch: 0;
     border-width: 1.5px;
-    border-color: input.has-focus ? COLOR_PRIMARY : COLOR_BORDER;
-    border-radius: RADIUS_MD;
-    background: COLOR_CARD;
+    border-color: input.has-focus ? Theme.primary : Theme.border;
+    border-radius: Theme.radius-md;
+    background: Theme.card;
 
     animate border-color { duration: 150ms; easing: ease-out; }
 
@@ -96,9 +98,9 @@ component TextField inherits Rectangle {
         input := TextInput {
             text <=> root.value;
             font-size: 14px;
-            color: COLOR_TEXT_PRIMARY;
-            selection-background-color: COLOR_PRIMARY;
-            selection-foreground-color: COLOR_CARD;
+            color: Theme.text-primary;
+            selection-background-color: Theme.primary;
+            selection-foreground-color: Theme.card;
             vertical-alignment: center;
         }
     }
@@ -110,7 +112,7 @@ component TextField inherits Rectangle {
         height: 100%;
         text: root.placeholder;
         font-size: 14px;
-        color: COLOR_TEXT_SECONDARY;
+        color: Theme.text-secondary;
         vertical-alignment: center;
         opacity: 0.6;
     }
@@ -125,9 +127,9 @@ component SecondaryButton inherits Rectangle {
     horizontal-stretch: 0;
     vertical-stretch: 0;
     border-width: 1px;
-    border-color: COLOR_BORDER;
-    border-radius: RADIUS_MD;
-    background: touch.has-hover ? #F3F6FA : COLOR_CARD;
+    border-color: Theme.border;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? #F3F6FA : Theme.card;
 
     animate background { duration: 120ms; easing: ease-out; }
 
@@ -135,7 +137,7 @@ component SecondaryButton inherits Rectangle {
         width: 100%;
         height: 100%;
         text: root.text;
-        color: COLOR_TEXT_PRIMARY;
+        color: Theme.text-primary;
         font-size: 13px;
         font-weight: 600;
         horizontal-alignment: center;
@@ -157,8 +159,8 @@ component PrimaryButton inherits Rectangle {
     horizontal-stretch: 0;
     vertical-stretch: 0;
     border-width: 0px;
-    border-radius: RADIUS_MD;
-    background: touch.has-hover ? COLOR_PRIMARY_LIGHT : COLOR_PRIMARY;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.primary-light : Theme.primary;
 
     animate background { duration: 150ms; easing: ease-out; }
 
@@ -166,7 +168,7 @@ component PrimaryButton inherits Rectangle {
         width: 100%;
         height: 100%;
         text: root.text;
-        color: COLOR_CARD;
+        color: Theme.card;
         font-size: 14px;
         font-weight: 600;
         horizontal-alignment: center;
@@ -182,10 +184,10 @@ component PrimaryButton inherits Rectangle {
 component Card inherits Rectangle {
     horizontal-stretch: 1;
     vertical-stretch: 0;
-    background: COLOR_CARD;
-    border-radius: RADIUS_LG;
+    background: Theme.card;
+    border-radius: Theme.radius-lg;
     border-width: 1px;
-    border-color: COLOR_BORDER;
+    border-color: Theme.border;
 }
 
 component TextRow inherits Rectangle {
@@ -197,7 +199,7 @@ component TextRow inherits Rectangle {
     background: transparent;
 
     VerticalLayout {
-        spacing: SPACING_SM;
+        spacing: Theme.spacing-sm;
         Label { text: root.label; }
         TextField {
             value <=> root.value;
@@ -217,7 +219,7 @@ component PathRow inherits Rectangle {
     background: transparent;
 
     VerticalLayout {
-        spacing: SPACING_SM;
+        spacing: Theme.spacing-sm;
         Label { text: root.label; }
         HorizontalLayout {
             spacing: SPACING_MD;
@@ -237,33 +239,33 @@ component StatusBadge inherits Rectangle {
     height: 24px;
     horizontal-stretch: 0;
     vertical-stretch: 0;
-    border-radius: RADIUS_SM;
-    background: COLOR_BACKGROUND;
+    border-radius: Theme.radius-sm;
+    background: Theme.background;
 
     HorizontalLayout {
-        spacing: SPACING_XS;
+        spacing: Theme.spacing-xs;
         padding: 8px;
 
         Rectangle {
             width: 6px;
             height: 6px;
             border-radius: 3px;
-            background: root.status == "success" ? COLOR_SUCCESS
-                : root.status == "failed" ? COLOR_ERROR
-                : root.status == "skipped" ? COLOR_WARNING
-                : root.status == "processing" ? COLOR_PRIMARY
-                : COLOR_TEXT_SECONDARY;
+            background: root.status == "success" ? Theme.success
+                : root.status == "failed" ? Theme.error
+                : root.status == "skipped" ? Theme.warning
+                : root.status == "processing" ? Theme.primary
+                : Theme.text-secondary;
         }
 
         Text {
             text: root.status;
             font-size: 11px;
             font-weight: 600;
-            color: root.status == "success" ? COLOR_SUCCESS
-                : root.status == "failed" ? COLOR_ERROR
-                : root.status == "skipped" ? COLOR_WARNING
-                : root.status == "processing" ? COLOR_PRIMARY
-                : COLOR_TEXT_SECONDARY;
+            color: root.status == "success" ? Theme.success
+                : root.status == "failed" ? Theme.error
+                : root.status == "skipped" ? Theme.warning
+                : root.status == "processing" ? Theme.primary
+                : Theme.text-secondary;
         }
     }
 }
@@ -276,33 +278,33 @@ component ProfileListRow inherits Rectangle {
     height: 56px;
     vertical-stretch: 0;
     border-width: 1px;
-    border-color: COLOR_BORDER;
-    border-radius: RADIUS_MD;
-    background: COLOR_CARD;
+    border-color: Theme.border;
+    border-radius: Theme.radius-md;
+    background: Theme.card;
 
     touch := TouchArea {}
 
     HorizontalLayout {
-        spacing: SPACING_MD;
+        spacing: Theme.spacing-md;
         padding: 16px;
 
         CheckBox {
             checked: root.profile.enabled;
-            changed checked => { root.toggle-profile(root.profile.id, self.checked); }
+            toggled => { root.toggle-profile(root.profile.id, self.checked); }
         }
         
         Text {
             text: root.profile.name;
             font-size: 14px;
             font-weight: 600;
-            color: COLOR_TEXT_PRIMARY;
+            color: Theme.text-primary;
             min-width: 160px;
         }
         
         Text {
             text: root.profile.folder;
             font-size: 12px;
-            color: COLOR_TEXT_SECONDARY;
+            color: Theme.text-secondary;
             horizontal-stretch: 1;
             max-width: 200px;
             overflow: elide;
@@ -321,12 +323,12 @@ component HistoryListRow inherits Rectangle {
     height: 56px;
     vertical-stretch: 0;
     border-width: 1px;
-    border-color: COLOR_BORDER;
-    border-radius: RADIUS_MD;
-    background: COLOR_CARD;
+    border-color: Theme.border;
+    border-radius: Theme.radius-md;
+    background: Theme.card;
 
     HorizontalLayout {
-        spacing: SPACING_MD;
+        spacing: Theme.spacing-md;
         padding: 16px;
         
         StatusBadge {
@@ -334,18 +336,18 @@ component HistoryListRow inherits Rectangle {
         }
         
         VerticalLayout {
-            spacing: SPACING_XS;
+            spacing: Theme.spacing-xs;
             
             Text { 
                 text: root.item.source; 
                 font-size: 13px; 
-                color: COLOR_TEXT_PRIMARY; 
+                color: Theme.text-primary; 
                 horizontal-stretch: 1;
             }
             Text { 
                 text: root.item.output; 
                 font-size: 11px; 
-                color: COLOR_TEXT_SECONDARY;
+                color: Theme.text-secondary;
             }
 
             ErrorText { 
@@ -399,15 +401,15 @@ export component AppWindow inherits Window {
     init => {
         Palette.color-scheme = ColorScheme.light;
     }
-    background: COLOR_BACKGROUND;
+    background: Theme.background;
 
     TabWidget {
         
         Tab {
             title: "Convert";
             VerticalLayout {
-                padding: SPACING_LG;
-                spacing: SPACING_MD;
+                padding: Theme.spacing-lg;
+                spacing: Theme.spacing-md;
                 
                 SectionTitle { 
                     text: "Convert Single File"; 
@@ -416,15 +418,15 @@ export component AppWindow inherits Window {
                 Subtitle {
                     text: "Choose a CSV or XLS file and convert it to modern XLSX format.";
                     font-size: 13px;
-                    color: COLOR_TEXT_SECONDARY;
+                    color: Theme.text-secondary;
                 }
                 
                 Card {
                     VerticalLayout {
-                        spacing: SPACING_MD;
+                        spacing: Theme.spacing-md;
                         
                         HorizontalLayout {
-                            spacing: SPACING_MD;
+                            spacing: Theme.spacing-md;
                             PathRow {
                                 label: "Input file";
                                 placeholder: "Paste path or click Browse";
@@ -435,7 +437,7 @@ export component AppWindow inherits Window {
                         }
                         
                         HorizontalLayout {
-                            padding-top: SPACING_SM;
+                            padding-top: Theme.spacing-sm;
                             PathRow {
                                 label: "Output folder";
                                 placeholder: "Optional - same as input folder";
@@ -446,7 +448,7 @@ export component AppWindow inherits Window {
                         }
                         
                         HorizontalLayout {
-                            spacing: SPACING_LG;
+                            spacing: Theme.spacing-lg;
                             CheckBox { 
                                 text: "Remove backticks"; 
                                 checked <=> root.remove-backticks; 
@@ -489,8 +491,8 @@ export component AppWindow inherits Window {
         Tab {
             title: "Monitor";
             VerticalLayout {
-                padding: SPACING_LG;
-                spacing: SPACING_MD;
+                padding: Theme.spacing-lg;
+                spacing: Theme.spacing-md;
                 
                 SectionTitle { 
                     text: "Folder Monitoring Profiles"; 
@@ -499,12 +501,12 @@ export component AppWindow inherits Window {
                 Subtitle {
                     text: "Automatically convert files dropped into monitored folders.";
                     font-size: 13px;
-                    color: COLOR_TEXT_SECONDARY;
+                    color: Theme.text-secondary;
                 }
                 
                 Card {
                     VerticalLayout {
-                        spacing: SPACING_MD;
+                        spacing: Theme.spacing-md;
                         
                         HorizontalLayout {
                             spacing: SPACING_MD;
@@ -576,53 +578,50 @@ export component AppWindow inherits Window {
                     clicked => { root.add-profile(); }
                 }
                 
-                if root.profiles.length > 0 {
-                    VerticalLayout {
-                        spacing: SPACING_SM;
-                        padding-top: SPACING_MD;
-                        
-                        Label { 
-                            text: "Active Profiles"; 
-                        }
-                        Rectangle { height: SPACING_XS; }
-                        
-                        for profile in root.profiles: ProfileListRow {
-                            profile: profile;
-                            delete-profile(id) => { root.delete-profile(id); }
-                            toggle-profile(id, enabled) => { root.toggle-profile(id, enabled); }
-                        }
+                if root.profiles.length > 0 : VerticalLayout {
+                    spacing: Theme.spacing-sm;
+                    padding-top: Theme.spacing-md;
+
+                    Label {
+                        text: "Active Profiles";
                     }
-                } else {
-                    Rectangle {
-                        height: 80px;
-                        border-radius: RADIUS_MD;
-                        background: COLOR_BACKGROUND;
-                        HorizontalLayout {
-                            padding: SPACING_MD;
-                            spacing: SPACING_MD;
-                            
+                    Rectangle { height: Theme.spacing-xs; }
+
+                    for profile in root.profiles: ProfileListRow {
+                        profile: profile;
+                        delete-profile(id) => { root.delete-profile(id); }
+                        toggle-profile(id, enabled) => { root.toggle-profile(id, enabled); }
+                    }
+                }
+                if root.profiles.length == 0 : Rectangle {
+                    height: 80px;
+                    border-radius: Theme.radius-md;
+                    background: Theme.background;
+                    HorizontalLayout {
+                        padding: Theme.spacing-md;
+                        spacing: Theme.spacing-md;
+
+                        Text {
+                            text: "📁";
+                            font-size: 32px;
+                        }
+
+                        Rectangle { width: Theme.spacing-md; }
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-sm;
+
                             Text {
-                                text: "📁";
-                                font-size: 32px;
+                                text: "No profiles created yet";
+                                font-size: 16px;
+                                font-weight: 600;
+                                color: Theme.text-primary;
                             }
-                            
-                            Rectangle { width: SPACING_MD; }
-                            
-                            VerticalLayout {
-                                spacing: SPACING_SM;
-                                
-                                Text {
-                                    text: "No profiles created yet";
-                                    font-size: 16px;
-                                    font-weight: 600;
-                                    color: COLOR_TEXT_PRIMARY;
-                                }
-                                
-                                Text {
-                                    text: "Create one to start monitoring a folder.";
-                                    font-size: 13px;
-                                    color: COLOR_TEXT_SECONDARY;
-                                }
+
+                            Text {
+                                text: "Create one to start monitoring a folder.";
+                                font-size: 13px;
+                                color: Theme.text-secondary;
                             }
                         }
                     }
@@ -632,8 +631,8 @@ export component AppWindow inherits Window {
         Tab {
             title: "History";
             VerticalLayout {
-                padding: SPACING_LG;
-                spacing: SPACING_MD;
+                padding: Theme.spacing-lg;
+                spacing: Theme.spacing-md;
                 
                 SectionTitle { 
                     text: "Conversion History"; 
@@ -642,48 +641,45 @@ export component AppWindow inherits Window {
                 Subtitle {
                     text: "Recent conversion activity and results.";
                     font-size: 13px;
-                    color: COLOR_TEXT_SECONDARY;
+                    color: Theme.text-secondary;
                 }
                 
-                if root.history-items.length > 0 {
-                    VerticalLayout {
-                        spacing: SPACING_SM;
-                        
-                        for item in root.history-items: HistoryListRow {
-                            item: item;
-                        }
+                if root.history-items.length > 0 : VerticalLayout {
+                    spacing: Theme.spacing-sm;
+
+                    for item in root.history-items: HistoryListRow {
+                        item: item;
                     }
-                } else {
-                    Rectangle {
-                        height: 120px;
-                        border-radius: RADIUS_LG;
-                        background: COLOR_BACKGROUND;
-                        HorizontalLayout {
-                            padding: SPACING_MD;
-                            spacing: SPACING_MD;
-                            
+                }
+                if root.history-items.length == 0 : Rectangle {
+                    height: 120px;
+                    border-radius: Theme.radius-lg;
+                    background: Theme.background;
+                    HorizontalLayout {
+                        padding: Theme.spacing-md;
+                        spacing: Theme.spacing-md;
+
+                        Text {
+                            text: "📁";
+                            font-size: 32px;
+                        }
+
+                        Rectangle { width: Theme.spacing-md; }
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-sm;
+
                             Text {
-                                text: "📁";
-                                font-size: 32px;
+                                text: "No conversions yet";
+                                font-size: 16px;
+                                font-weight: 600;
+                                color: Theme.text-primary;
                             }
-                            
-                            Rectangle { width: SPACING_MD; }
-                            
-                            VerticalLayout {
-                                spacing: SPACING_SM;
-                                
-                                Text {
-                                    text: "No conversions yet";
-                                    font-size: 16px;
-                                    font-weight: 600;
-                                    color: COLOR_TEXT_PRIMARY;
-                                }
-                                
-                                Text {
-                                    text: "Convert a file or set up monitoring to get started.";
-                                    font-size: 13px;
-                                    color: COLOR_TEXT_SECONDARY;
-                                }
+
+                            Text {
+                                text: "Convert a file or set up monitoring to get started.";
+                                font-size: 13px;
+                                color: Theme.text-secondary;
                             }
                         }
                     }
@@ -693,8 +689,8 @@ export component AppWindow inherits Window {
         Tab {
             title: "Settings";
             VerticalLayout {
-                padding: SPACING_LG;
-                spacing: SPACING_MD;
+                padding: Theme.spacing-lg;
+                spacing: Theme.spacing-md;
                 
                 SectionTitle { 
                     text: "Application Settings"; 
@@ -703,12 +699,12 @@ export component AppWindow inherits Window {
                 Subtitle {
                     text: "Configure how the application behaves.";
                     font-size: 13px;
-                    color: COLOR_TEXT_SECONDARY;
+                    color: Theme.text-secondary;
                 }
                 
                 Card {
                     VerticalLayout {
-                        spacing: SPACING_MD;
+                        spacing: Theme.spacing-md;
                         
                         Label { 
                             text: "Startup & Integration"; 
@@ -729,7 +725,7 @@ export component AppWindow inherits Window {
                         StatusText {
                             text: "After enabling, you may need to restart the application for changes to take effect.";
                             font-size: 12px;
-                            color: COLOR_TEXT_SECONDARY;
+                            color: Theme.text-secondary;
                             opacity: 0.8;
                         }
                     }
