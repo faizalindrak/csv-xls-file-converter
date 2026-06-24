@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.23] - 2026-06-24
+
+### Fixed
+- Preserve `NAN`, `INF`, and `-INF` CSV values as text so XLSX conversion no longer fails in XlsxWriter
+
 ## [0.4.22] - 2026-02-06
 
 ### Added
