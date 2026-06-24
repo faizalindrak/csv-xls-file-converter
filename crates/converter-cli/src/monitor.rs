@@ -68,15 +68,27 @@ pub fn discover_existing_files(
     exclude_keywords: &str,
 ) -> std::io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
-    for entry in fs::read_dir(folder_path)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file()
-            && should_process(&path.to_string_lossy(), allowed_formats, exclude_keywords)
-        {
-            files.push(path);
+    
+    fn walk_directory(
+        dir: &Path,
+        allowed_formats: &[String],
+        exclude_keywords: &str,
+        files: &mut Vec<PathBuf>,
+    ) -> std::io::Result<()> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            
+            if path.is_file() && should_process(&path.to_string_lossy(), allowed_formats, exclude_keywords) {
+                files.push(path);
+            } else if path.is_dir() {
+                walk_directory(&path, allowed_formats, exclude_keywords, files)?;
+            }
         }
+        Ok(())
     }
+    
+    walk_directory(folder_path, allowed_formats, exclude_keywords, &mut files)?;
     files.sort();
     Ok(files)
 }
@@ -110,7 +122,7 @@ pub fn monitor_folder(config: MonitorConfig) -> Result<(), String> {
     )
     .map_err(|err| err.to_string())?;
     watcher
-        .watch(&config.folder_path, RecursiveMode::NonRecursive)
+        .watch(&config.folder_path, RecursiveMode::Recursive)
         .map_err(|err| err.to_string())?;
 
     println!("Monitoring folder: {}", config.folder_path.display());
