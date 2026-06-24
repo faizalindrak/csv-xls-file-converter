@@ -1,0 +1,70 @@
+name: Rust Port Build
+
+on:
+  push:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.bat"
+      - "installer.iss"
+      - "scripts/**"
+      - "crates/**"
+      - ".github/workflows/rust-port.yml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.bat"
+      - "installer.iss"
+      - "scripts/**"
+      - "crates/**"
+      - ".github/workflows/rust-port.yml"
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: Windows Rust build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Build portable executables
+        shell: cmd
+        run: build.bat
+
+      - name: Summarize build
+        shell: pwsh
+        run: |
+          $runUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          $files = Get-ChildItem -Path dist -Filter "*.exe" | Sort-Object Name
+
+          "## Rust port build" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "[Workflow run logs]($runUrl)" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| File | Size |" >> $env:GITHUB_STEP_SUMMARY
+          "| --- | ---: |" >> $env:GITHUB_STEP_SUMMARY
+          foreach ($file in $files) {
+            "| dist/$($file.Name) | $($file.Length) bytes |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          $files | Select-Object Name, Length
