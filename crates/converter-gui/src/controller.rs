@@ -52,10 +52,9 @@ pub fn wire_callbacks(app: &AppWindow) {
     context.start_enabled_profiles();
     wire_conversion(app, context.clone());
     wire_browse_actions(app);
-    wire_file_drop(app);
+    wire_file_drop(app, context.clone());
     wire_profiles(app, context.clone());
     wire_settings(app);
-    wire_shutdown(app, context);
 }
 
 struct ControllerContext {
@@ -694,7 +693,7 @@ fn set_input_path_from_file(app: &AppWindow, path: &Path) {
     app.set_status_message(format!("Selected: {}", path_display_name(path)).into());
 }
 
-fn wire_file_drop(app: &AppWindow) {
+fn wire_file_drop(app: &AppWindow, context: Arc<ControllerContext>) {
     let weak = app.as_weak();
     app.window()
         .on_winit_window_event(move |_window, event| match event {
@@ -708,6 +707,13 @@ fn wire_file_drop(app: &AppWindow) {
                 app.set_input_path(SharedString::from(input_path.as_str()));
                 app.set_status_message(format!("Selected: {}", path_display_name(path)).into());
                 EventResult::PreventDefault
+            }
+            winit::event::WindowEvent::CloseRequested => {
+                context.monitor_manager.shutdown_all();
+                if let Some(app) = weak.upgrade() {
+                    app.set_status_message("Shutting down monitors...".into());
+                }
+                EventResult::Propagate
             }
             _ => EventResult::Propagate,
         });
@@ -824,21 +830,6 @@ fn wire_settings(app: &AppWindow) {
             app.set_conversion_result(feedback.into());
         }
     });
-}
-
-fn wire_shutdown(app: &AppWindow, context: Arc<ControllerContext>) {
-    let weak = app.as_weak();
-    app.window()
-        .on_winit_window_event(move |_window, event| match event {
-            winit::event::WindowEvent::CloseRequested => {
-                context.monitor_manager.shutdown_all();
-                if let Some(app) = weak.upgrade() {
-                    app.set_status_message("Shutting down monitors...".into());
-                }
-                EventResult::Propagate
-            }
-            _ => EventResult::Propagate,
-        });
 }
 
 fn save_settings(app: &AppWindow) -> String {

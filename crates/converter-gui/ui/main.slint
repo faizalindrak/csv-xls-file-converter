@@ -25,8 +25,8 @@ const COLOR_CARD: color = #FFFFFF;
 const COLOR_TEXT_PRIMARY: color = #1E293B;
 const COLOR_TEXT_SECONDARY: color = #64748B;
 const COLOR_BORDER: color = #E2E8F0;
-const COLOR_HOVER: color = rgba(37, 99, 235, 0.08);
-const COLOR_ACTIVE: color = rgba(37, 99, 235, 0.12);
+const COLOR_HOVER: color = rgba(37, 99, 235, 8%);
+const COLOR_ACTIVE: color = rgba(37, 99, 235, 12%);
 const SPACING_XS: length = 4px;
 const SPACING_SM: length = 8px;
 const SPACING_MD: length = 16px;
@@ -127,7 +127,7 @@ component SecondaryButton inherits Rectangle {
     border-width: 1px;
     border-color: COLOR_BORDER;
     border-radius: RADIUS_MD;
-    background: touch.has-hover ? rgba(243, 246, 250, 1) : COLOR_CARD;
+    background: touch.has-hover ? #F3F6FA : COLOR_CARD;
 
     animate background { duration: 120ms; easing: ease-out; }
 
@@ -248,26 +248,22 @@ component StatusBadge inherits Rectangle {
             width: 6px;
             height: 6px;
             border-radius: 3px;
-            background: match root.status {
-                "success" => COLOR_SUCCESS,
-                "failed" => COLOR_ERROR,
-                "skipped" => COLOR_WARNING,
-                "processing" => COLOR_PRIMARY,
-                _ => COLOR_TEXT_SECONDARY
-            };
+            background: root.status == "success" ? COLOR_SUCCESS
+                : root.status == "failed" ? COLOR_ERROR
+                : root.status == "skipped" ? COLOR_WARNING
+                : root.status == "processing" ? COLOR_PRIMARY
+                : COLOR_TEXT_SECONDARY;
         }
 
         Text {
             text: root.status;
             font-size: 11px;
             font-weight: 600;
-            color: match root.status {
-                "success" => COLOR_SUCCESS,
-                "failed" => COLOR_ERROR,
-                "skipped" => COLOR_WARNING,
-                "processing" => COLOR_PRIMARY,
-                _ => COLOR_TEXT_SECONDARY
-            };
+            color: root.status == "success" ? COLOR_SUCCESS
+                : root.status == "failed" ? COLOR_ERROR
+                : root.status == "skipped" ? COLOR_WARNING
+                : root.status == "processing" ? COLOR_PRIMARY
+                : COLOR_TEXT_SECONDARY;
         }
     }
 }
