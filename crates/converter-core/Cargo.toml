@@ -1,0 +1,13 @@
+[package]
+name = "converter-core"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+chrono.workspace = true
+csv.workspace = true
+encoding_rs.workspace = true
+regex.workspace = true
+rust_xlsxwriter.workspace = true
+thiserror.workspace = true

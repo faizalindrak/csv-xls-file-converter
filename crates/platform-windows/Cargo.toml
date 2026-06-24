@@ -1,0 +1,11 @@
+[package]
+name = "platform-windows"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true

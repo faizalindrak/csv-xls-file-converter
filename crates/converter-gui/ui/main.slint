@@ -1,0 +1,24 @@
+import { VerticalBox } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "CSV/XLS Converter";
+    width: 960px;
+    height: 640px;
+
+    VerticalBox {
+        alignment: start;
+        padding: 24px;
+
+        Text {
+            text: "CSV/XLS Converter";
+            font-size: 28px;
+            font-weight: 650;
+        }
+
+        Text {
+            text: "Rust/Slint workspace scaffold";
+            color: #5D6673;
+            font-size: 14px;
+        }
+    }
+}

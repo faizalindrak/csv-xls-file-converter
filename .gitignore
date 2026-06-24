@@ -66,3 +66,6 @@ nul
 
 # Test scripts
 test_history.py
+
+# Rust
+target/
