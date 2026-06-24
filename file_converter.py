@@ -4,6 +4,7 @@ Converts CSV and XLS files to XLSX format automatically.
 """
 
 import csv
+import math
 import sys
 import os
 import time
@@ -230,30 +231,20 @@ def clean_numeric(s):
     if len(s) > 1 and s[0] == "0" and s[1].isdigit():
         return s
 
-    # Try to convert to float directly
-    try:
-        return float(s)
-    except ValueError:
-        pass
-
-    # Try replacing comma with dot (for cases like "1,23")
-    try:
-        return float(s.replace(",", "."))
-    except ValueError:
-        pass
-
-    # Try removing dots (as thousand separators) and replacing comma with dot (as decimal)
-    try:
-        return float(s.replace(".", "").replace(",", "."))
-    except ValueError:
-        pass
-
-    # Try removing commas (as thousand separators)
-    try:
-        return float(s.replace(",", ""))
-    except ValueError:
-        pass
-
+    numeric_candidates = (
+        s,
+        s.replace(",", "."),
+        s.replace(".", "").replace(",", "."),
+        s.replace(",", ""),
+    )
+    for candidate in numeric_candidates:
+        try:
+            number = float(candidate)
+        except ValueError:
+            continue
+        if math.isfinite(number):
+            return number
+        return s
     return s
 
 
