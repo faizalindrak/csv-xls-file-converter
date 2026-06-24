@@ -47,6 +47,7 @@ pub struct SingleFileSettings {
 #[serde(default)]
 pub struct GlobalSettings {
     pub auto_startup: bool,
+    pub context_menu: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

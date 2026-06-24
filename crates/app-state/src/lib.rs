@@ -6,7 +6,7 @@ pub use models::{
 };
 pub use store::{
     config_dir, history_path, load_history_from, load_profiles_from, profiles_path,
-    save_profiles_to, StateError,
+    save_history_to, save_profiles_to, StateError,
 };
 
 pub fn app_name() -> &'static str {

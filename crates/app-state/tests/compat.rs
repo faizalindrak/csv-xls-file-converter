@@ -22,7 +22,10 @@ fn loads_existing_profile_json_shape() {
             "auto_detect_dates": true,
             "delete_source": false
         },
-        "global_settings": { "auto_startup": true },
+        "global_settings": {
+            "auto_startup": true,
+            "context_menu": true
+        },
         "future_field": "ignored"
     }"#;
 
@@ -33,6 +36,7 @@ fn loads_existing_profile_json_shape() {
     assert_eq!(doc.profiles[0].exclude_keywords, "temp,backup");
     assert!(doc.single_file_settings.remove_backticks);
     assert!(doc.global_settings.auto_startup);
+    assert!(doc.global_settings.context_menu);
 }
 
 #[test]
@@ -46,4 +50,5 @@ fn defaults_match_python_models() {
     assert!(profile.process_existing);
     assert!(!single.delete_source);
     assert!(!global.auto_startup);
+    assert!(!global.context_menu);
 }
