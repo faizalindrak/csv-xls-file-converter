@@ -25,6 +25,7 @@ pub fn history_model(history: &[ConversionHistoryItem]) -> ModelRc<HistoryRow> {
             source: SharedString::from(item.source_path.clone()),
             output: SharedString::from(item.output_path.clone()),
             status: SharedString::from(item.status.clone()),
+            error_message: SharedString::from(item.error_message.clone()),
         })
         .collect::<Vec<_>>();
     ModelRc::from(Rc::new(VecModel::from(rows)))
