@@ -3,6 +3,7 @@
 mod controller;
 mod models;
 mod silent;
+mod tray;
 
 slint::include_modules!();
 
@@ -16,7 +17,9 @@ fn main() -> Result<(), slint::PlatformError> {
         .select()?;
 
     let app = AppWindow::new()?;
+    let tray = tray::TrayController::new(&app);
     controller::load_initial_state(&app);
-    controller::wire_callbacks(&app);
-    app.run()
+    controller::wire_callbacks(&app, tray);
+    app.show()?;
+    slint::run_event_loop_until_quit()
 }
