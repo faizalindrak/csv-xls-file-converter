@@ -1,5 +1,4 @@
 const STARTUP_REG_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-const CONTEXT_MENU_NAME: &str = "ConvertToXLSX";
 const CONTEXT_MENU_TEXT: &str = "Convert to XLSX";
 const CLASSIC_SHELL_EXTENSIONS: [&str; 2] = [
     r"Software\Classes\.csv\shell\ConvertToXLSX",
@@ -205,6 +204,5 @@ mod tests {
             .iter()
             .any(|path| path.contains(r".xls\shell\ConvertToXLSX")));
         assert_eq!(paths.len(), 4);
-        assert_eq!(CONTEXT_MENU_NAME, "ConvertToXLSX");
     }
 }

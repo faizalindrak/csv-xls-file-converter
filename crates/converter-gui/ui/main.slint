@@ -71,11 +71,6 @@ component ErrorText inherits Text {
     color: Theme.error;
 }
 
-component WarningText inherits Text {
-    font-size: 13px;
-    color: Theme.warning;
-}
-
 component TextField inherits Rectangle {
     in-out property <string> value;
     in property <string> placeholder;
@@ -190,24 +185,6 @@ component Card inherits Rectangle {
     border-color: Theme.border;
 }
 
-component TextRow inherits Rectangle {
-    in-out property <string> value;
-    in property <string> label;
-    in property <string> placeholder;
-    height: 72px;
-    vertical-stretch: 0;
-    background: transparent;
-
-    VerticalLayout {
-        spacing: Theme.spacing-sm;
-        Label { text: root.label; }
-        TextField {
-            value <=> root.value;
-            placeholder: root.placeholder;
-        }
-    }
-}
-
 component PathRow inherits Rectangle {
     in-out property <string> value;
     in property <string> label;
@@ -222,7 +199,7 @@ component PathRow inherits Rectangle {
         spacing: Theme.spacing-sm;
         Label { text: root.label; }
         HorizontalLayout {
-            spacing: SPACING_MD;
+            spacing: Theme.spacing-md;
             TextField {
                 value <=> root.value;
                 placeholder: root.placeholder;
@@ -509,10 +486,10 @@ export component AppWindow inherits Window {
                         spacing: Theme.spacing-md;
                         
                         HorizontalLayout {
-                            spacing: SPACING_MD;
+                            spacing: Theme.spacing-md;
                             VerticalLayout {
                                 horizontal-stretch: 1;
-                                spacing: SPACING_MD;
+                                spacing: Theme.spacing-md;
                                 
                                 TextField {
                                     placeholder: "Profile name";
@@ -537,12 +514,11 @@ export component AppWindow inherits Window {
                             }
                             
                             VerticalLayout {
-                                spacing: SPACING_MD;
+                                spacing: Theme.spacing-md;
                                 
                                 Label { 
                                     text: "Options"; 
                                 }
-                                Rectangle { height: SPACING_XS; }
                                 CheckBox { 
                                     text: "Process existing files"; 
                                     checked <=> root.process-existing;

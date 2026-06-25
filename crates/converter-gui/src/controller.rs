@@ -316,7 +316,7 @@ impl MonitorRuntime {
         let output_folder = normalized_output_folder(&self.profile.output_folder);
 
         RecommendedWatcher::new(
-            move |result| {
+            move |result: notify::Result<notify::Event>| {
                 if stop.load(Ordering::SeqCst) {
                     return;
                 }

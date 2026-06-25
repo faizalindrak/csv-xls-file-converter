@@ -29,7 +29,8 @@ fn convert_screen_uses_high_contrast_fixed_height_controls() {
     assert!(ui_source.contains("component PrimaryButton inherits Rectangle"));
     assert!(ui_source.contains("background: touch.has-hover ? Theme.primary-light : Theme.primary"));
     assert!(ui_source.contains("color: Theme.card"));
-    assert!(ui_source.contains("PrimaryButton { text: \"Convert to XLSX\""));
+    assert!(ui_source.contains("text: \"Convert to XLSX\";"));
+    assert!(ui_source.contains("clicked => { root.convert-file(); }"));
 
     // And fixed-height controls must not stretch into low-contrast blank panels.
     assert!(ui_source.contains("height: 44px;"));
