@@ -25,6 +25,7 @@ use slint::winit_030::{winit, EventResult, WinitWindowAccessor};
 use slint::{ComponentHandle, SharedString, Weak};
 
 use crate::models::{history_model, profile_model};
+use crate::tray::TrayController;
 use crate::AppWindow;
 
 const HISTORY_LIMIT: usize = 200;
@@ -47,12 +48,19 @@ pub fn load_initial_state(app: &AppWindow) {
     refresh_history(app);
 }
 
-pub fn wire_callbacks(app: &AppWindow) {
+pub fn wire_callbacks(app: &AppWindow, tray: Arc<TrayController>) {
     let context = Arc::new(ControllerContext::new(app));
     context.start_enabled_profiles();
     wire_conversion(app, context.clone());
     wire_browse_actions(app);
-    wire_file_drop(app, context.clone());
+    tray.set_quit_handler({
+        let context = context.clone();
+        move || {
+            context.monitor_manager.shutdown_all();
+            context.update_status_message("Stopping background monitoring...".to_string());
+        }
+    });
+    wire_file_drop(app, tray);
     wire_profiles(app, context.clone());
     wire_settings(app);
 }
@@ -713,7 +721,7 @@ fn set_input_path_from_file(app: &AppWindow, path: &Path) {
     app.set_status_message(format!("Selected: {}", path_display_name(path)).into());
 }
 
-fn wire_file_drop(app: &AppWindow, context: Arc<ControllerContext>) {
+fn wire_file_drop(app: &AppWindow, tray: Arc<TrayController>) {
     let weak = app.as_weak();
     app.window()
         .on_winit_window_event(move |_window, event| match event {
@@ -728,53 +736,71 @@ fn wire_file_drop(app: &AppWindow, context: Arc<ControllerContext>) {
                 app.set_status_message(format!("Selected: {}", path_display_name(path)).into());
                 EventResult::PreventDefault
             }
-            winit::event::WindowEvent::CloseRequested => {
-                context.monitor_manager.shutdown_all();
-                if let Some(app) = weak.upgrade() {
-                    app.set_status_message("Shutting down monitors...".into());
-                }
-                EventResult::Propagate
-            }
+            winit::event::WindowEvent::CloseRequested => tray.handle_close_requested(),
             _ => EventResult::Propagate,
         });
 }
 
 fn wire_profiles(app: &AppWindow, context: Arc<ControllerContext>) {
     let weak = app.as_weak();
-    let context_for_add = context.clone();
+    let context_for_save = context.clone();
     app.on_add_profile(move || {
         let Some(app) = weak.upgrade() else {
             return;
         };
 
-        let mut profile = MonitorProfile {
-            name: app.get_profile_name().to_string(),
-            watch_folder: app.get_watch_folder().to_string(),
-            output_folder: app.get_monitor_output_folder().to_string(),
-            process_existing: app.get_process_existing(),
-            delete_source: app.get_monitor_delete_source(),
-            auto_detect_dates: app.get_monitor_auto_detect_dates(),
-            exclude_keywords: app.get_exclude_keywords().to_string(),
-            file_formats: selected_formats(
-                app.get_monitor_csv_enabled(),
-                app.get_monitor_xls_enabled(),
-            ),
-            ..MonitorProfile::default()
-        };
-        if profile.name.trim().is_empty() {
-            profile.name = "New Profile".to_string();
-        }
-
+        let editing_profile_id = app.get_editing_profile_id().to_string();
+        let editing_profile_id_for_save = editing_profile_id.clone();
+        let profile = build_profile_from_form(&app);
         let profile_name = profile.name.clone();
-        let result = context_for_add.persist_profiles(move |profiles| {
-            profiles.push(profile);
-            Ok(())
+        let result = context_for_save.persist_profiles(move |profiles| {
+            upsert_profile(profiles, profile, &editing_profile_id_for_save).map(|_| ())
         });
 
         match result {
-            Ok(_) => app.set_status_message(format!("Profile saved: {profile_name}").into()),
+            Ok(_) => {
+                reset_profile_form(&app);
+                let action = if editing_profile_id.is_empty() {
+                    "saved"
+                } else {
+                    "updated"
+                };
+                app.set_status_message(format!("Profile {action}: {profile_name}").into());
+            }
             Err(error) => app.set_status_message(format!("Failed to save profile: {error}").into()),
         }
+    });
+
+    let weak = app.as_weak();
+    app.on_edit_profile(move |id| {
+        let Some(app) = weak.upgrade() else {
+            return;
+        };
+        let profile_id = id.to_string();
+        let result = load_profile_document().and_then(|doc| {
+            doc.profiles
+                .into_iter()
+                .find(|profile| profile.id == profile_id)
+                .ok_or_else(|| "profile not found".to_string())
+        });
+
+        match result {
+            Ok(profile) => {
+                let profile_name = profile.name.clone();
+                populate_profile_form(&app, &profile);
+                app.set_status_message(format!("Editing profile: {profile_name}").into());
+            }
+            Err(error) => app.set_status_message(format!("Failed to load profile: {error}").into()),
+        }
+    });
+
+    let weak = app.as_weak();
+    app.on_cancel_profile_edit(move || {
+        let Some(app) = weak.upgrade() else {
+            return;
+        };
+        reset_profile_form(&app);
+        app.set_status_message("Profile edit canceled".into());
     });
 
     let weak = app.as_weak();
@@ -784,13 +810,19 @@ fn wire_profiles(app: &AppWindow, context: Arc<ControllerContext>) {
             return;
         };
         let id = id.to_string();
+        let is_editing_deleted_profile = app.get_editing_profile_id().as_str() == id.as_str();
         let result = context_for_delete.persist_profiles(|profiles| {
             profiles.retain(|profile| profile.id != id);
             Ok(())
         });
 
         match result {
-            Ok(_) => app.set_status_message("Profile deleted".into()),
+            Ok(_) => {
+                if is_editing_deleted_profile {
+                    reset_profile_form(&app);
+                }
+                app.set_status_message("Profile deleted".into());
+            }
             Err(error) => {
                 app.set_status_message(format!("Failed to delete profile: {error}").into())
             }
@@ -834,6 +866,81 @@ fn wire_profiles(app: &AppWindow, context: Arc<ControllerContext>) {
             }
         }
     });
+}
+
+fn build_profile_from_form(app: &AppWindow) -> MonitorProfile {
+    let mut profile = MonitorProfile {
+        name: app.get_profile_name().to_string(),
+        watch_folder: app.get_watch_folder().to_string(),
+        output_folder: app.get_monitor_output_folder().to_string(),
+        process_existing: app.get_process_existing(),
+        delete_source: app.get_monitor_delete_source(),
+        auto_detect_dates: app.get_monitor_auto_detect_dates(),
+        exclude_keywords: app.get_exclude_keywords().to_string(),
+        file_formats: selected_formats(
+            app.get_monitor_csv_enabled(),
+            app.get_monitor_xls_enabled(),
+        ),
+        ..MonitorProfile::default()
+    };
+    if profile.name.trim().is_empty() {
+        profile.name = "New Profile".to_string();
+    }
+    profile
+}
+
+fn populate_profile_form(app: &AppWindow, profile: &MonitorProfile) {
+    let formats = normalized_formats(&profile.file_formats);
+    let csv_enabled = formats.iter().any(|format| format == "csv");
+    let xls_enabled = formats.iter().any(|format| format == "xls");
+
+    app.set_profile_name(profile.name.clone().into());
+    app.set_watch_folder(profile.watch_folder.clone().into());
+    app.set_monitor_output_folder(profile.output_folder.clone().into());
+    app.set_process_existing(profile.process_existing);
+    app.set_monitor_delete_source(profile.delete_source);
+    app.set_monitor_auto_detect_dates(profile.auto_detect_dates);
+    app.set_monitor_csv_enabled(csv_enabled);
+    app.set_monitor_xls_enabled(xls_enabled);
+    app.set_exclude_keywords(profile.exclude_keywords.clone().into());
+    app.set_editing_profile_id(profile.id.clone().into());
+}
+
+fn reset_profile_form(app: &AppWindow) {
+    app.set_profile_name(SharedString::new());
+    app.set_watch_folder(SharedString::new());
+    app.set_monitor_output_folder(SharedString::new());
+    app.set_process_existing(true);
+    app.set_monitor_delete_source(false);
+    app.set_monitor_auto_detect_dates(false);
+    app.set_monitor_csv_enabled(true);
+    app.set_monitor_xls_enabled(true);
+    app.set_exclude_keywords(SharedString::new());
+    app.set_editing_profile_id(SharedString::new());
+}
+
+fn upsert_profile(
+    profiles: &mut Vec<MonitorProfile>,
+    mut profile: MonitorProfile,
+    editing_profile_id: &str,
+) -> Result<String, String> {
+    if editing_profile_id.is_empty() {
+        let saved_id = profile.id.clone();
+        profiles.push(profile);
+        return Ok(saved_id);
+    }
+
+    let Some(index) = profiles
+        .iter()
+        .position(|existing| existing.id == editing_profile_id)
+    else {
+        return Err("profile not found".to_string());
+    };
+
+    profile.id = profiles[index].id.clone();
+    profile.enabled = profiles[index].enabled;
+    profiles[index] = profile;
+    Ok(editing_profile_id.to_string())
 }
 
 fn wire_settings(app: &AppWindow) {
@@ -1179,6 +1286,47 @@ mod tests {
     }
 
     #[test]
+    fn upsert_profile_replaces_existing_profile_instead_of_duplicating_it() {
+        let existing = MonitorProfile {
+            id: "profile-1".to_string(),
+            name: "Master Data".to_string(),
+            watch_folder: r"D:\input\master".to_string(),
+            output_folder: String::new(),
+            enabled: true,
+            delete_source: false,
+            process_existing: true,
+            auto_detect_dates: false,
+            file_formats: vec!["csv".to_string()],
+            exclude_keywords: String::new(),
+        };
+        let updated = MonitorProfile {
+            id: "draft-id".to_string(),
+            name: "Master Data Updated".to_string(),
+            watch_folder: r"D:\input\edited".to_string(),
+            output_folder: r"D:\output".to_string(),
+            enabled: false,
+            delete_source: true,
+            process_existing: false,
+            auto_detect_dates: true,
+            file_formats: vec!["xls".to_string()],
+            exclude_keywords: "temp".to_string(),
+        };
+        let mut profiles = vec![existing.clone()];
+
+        let saved_id = upsert_profile(&mut profiles, updated, &existing.id)
+            .expect("existing profile should update");
+
+        assert_eq!(saved_id, existing.id);
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(profiles[0].id, existing.id);
+        assert_eq!(profiles[0].name, "Master Data Updated");
+        assert_eq!(profiles[0].watch_folder, r"D:\input\edited");
+        assert_eq!(profiles[0].output_folder, r"D:\output");
+        assert_eq!(profiles[0].file_formats, vec!["xls".to_string()]);
+        assert_eq!(profiles[0].exclude_keywords, "temp");
+    }
+
+    #[test]
     fn should_skip_existing_output_skips_xlsx_sources() {
         let path = Path::new(r"C:\input\already.xlsx");
         assert!(should_skip_existing_output(path, None));
@@ -1189,5 +1337,16 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("create temp directory");
         let missing = temp_dir.path().join("missing.csv");
         assert!(!is_file_ready(&missing));
+    }
+
+    #[test]
+    fn close_requests_are_prevented_until_tray_quit_is_requested() {
+        let close_guard = crate::tray::CloseGuard::default();
+
+        assert!(close_guard.should_prevent_close());
+
+        close_guard.request_quit();
+
+        assert!(!close_guard.should_prevent_close());
     }
 }
