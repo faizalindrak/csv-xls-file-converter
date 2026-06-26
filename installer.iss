@@ -2,10 +2,11 @@
 ; Build with: iscc installer.iss
 
 #define MyAppName "CSV-XLS Converter"
-#define MyAppVersion "0.4.22"
+#define MyAppVersion "0.4.25"
 #define MyAppPublisher "CSV-XLS Converter"
 #define MyAppURL "https://github.com/faizalindrak/csv-xls-file-converter"
 #define MyAppExeName "CSV-XLS-Converter.exe"
+#define MyCliExeName "CSV-XLS-Converter-CLI.exe"
 #define MyAppDescription "Convert CSV and XLS files to XLSX format"
 
 [Setup]
@@ -63,8 +64,11 @@ Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescrip
 Name: "contextmenu"; Description: "Add ""Convert to XLSX"" to right-click context menu"; GroupDescription: "Windows Explorer Integration:"; Flags: checkedonce
 
 [Files]
-; Main executable from PyInstaller output
+; Main GUI executable from Cargo release output
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+
+; Command-line executable for automation
+Source: "dist\{#MyCliExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 ; If you have additional files (config, assets, etc.), add them here:
 ; Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs

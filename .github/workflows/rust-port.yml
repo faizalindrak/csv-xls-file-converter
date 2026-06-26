@@ -1,0 +1,147 @@
+name: Rust Port Build
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "rust-port-v*"
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.bat"
+      - "installer.iss"
+      - "scripts/**"
+      - "crates/**"
+      - ".github/workflows/rust-port.yml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.bat"
+      - "installer.iss"
+      - "scripts/**"
+      - "crates/**"
+      - ".github/workflows/rust-port.yml"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional release tag to publish, for example rust-port-v0.4.23"
+        required: false
+        type: string
+      prerelease:
+        description: "Mark manually published release as a prerelease"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows Rust build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Build portable executables
+        shell: cmd
+        run: build.bat
+
+      - name: Summarize build
+        shell: pwsh
+        run: |
+          $runUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          $files = Get-ChildItem -Path dist -Filter "*.exe" | Sort-Object Name
+
+          "## Rust port build" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "[Workflow run logs]($runUrl)" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "| File | Size |" >> $env:GITHUB_STEP_SUMMARY
+          "| --- | ---: |" >> $env:GITHUB_STEP_SUMMARY
+          foreach ($file in $files) {
+            "| dist/$($file.Name) | $($file.Length) bytes |" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          $files | Select-Object Name, Length
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/rust-port-v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $prerelease = $true
+
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "${{ inputs.release_tag }}"
+            $prerelease = [System.Boolean]::Parse("${{ inputs.prerelease }}")
+          }
+
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw "release_tag is required when publishing a release manually"
+          }
+
+          if ($tag -notmatch "^rust-port-v[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.]+)?$") {
+            throw "Release tag must look like rust-port-v0.4.23 or rust-port-v0.4.23-preview.1"
+          }
+
+          $runUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          $releaseUrl = "https://github.com/${{ github.repository }}/releases/tag/$tag"
+          $notesPath = Join-Path $env:RUNNER_TEMP "rust-port-release-notes.md"
+
+          $notes = @(
+            "Rust port Windows build.",
+            "",
+            "- Workflow run: $runUrl",
+            "- Commit: $env:GITHUB_SHA",
+            "",
+            "Downloads:",
+            "- CSV-XLS-Converter.exe",
+            "- CSV-XLS-Converter-CLI.exe"
+          )
+          $notes | Set-Content -Path $notesPath
+
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag dist/CSV-XLS-Converter.exe dist/CSV-XLS-Converter-CLI.exe --clobber --repo "${{ github.repository }}"
+          } else {
+            $args = @(
+              "release", "create", $tag,
+              "dist/CSV-XLS-Converter.exe",
+              "dist/CSV-XLS-Converter-CLI.exe",
+              "--repo", "${{ github.repository }}",
+              "--target", $env:GITHUB_SHA,
+              "--title", "Rust Port $tag",
+              "--notes-file", $notesPath
+            )
+            if ($prerelease) {
+              $args += "--prerelease"
+            }
+            gh @args
+          }
+
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "Download release assets: [$tag]($releaseUrl)" >> $env:GITHUB_STEP_SUMMARY

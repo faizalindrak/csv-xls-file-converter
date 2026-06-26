@@ -1,0 +1,990 @@
+import { CheckBox, Palette, ScrollView, TabWidget } from "std-widgets.slint";
+
+export struct ProfileRow {
+    id: string,
+    name: string,
+    folder: string,
+    enabled: bool,
+}
+
+export struct HistoryRow {
+    source: string,
+    output: string,
+    status: string,
+    timestamp: string,
+    error-message: string,
+}
+
+global Theme {
+    out property <color> primary: #2563EB;
+    out property <color> primary-dark: #1D4ED8;
+    out property <color> primary-light: #1D4ED8;
+    out property <color> success: #15803D;
+    out property <color> warning: #B45309;
+    out property <color> error: #B91C1C;
+    out property <color> background: #EEF2F7;
+    out property <color> card: #FFFFFF;
+    out property <color> card-muted: #F8FAFC;
+    out property <color> text-primary: #1B1F24;
+    out property <color> text-secondary: #4B5563;
+    out property <color> text-tertiary: #8B95A3;
+    out property <color> border: #D8DEE6;
+    out property <color> border-strong: #B8C2CF;
+    out property <color> border-subtle: #E8ECF1;
+    out property <color> hover: #F7F9FC;
+    out property <color> active: rgba(37, 99, 235, 12%);
+    out property <length> spacing-xs: 4px;
+    out property <length> spacing-sm: 8px;
+    out property <length> spacing-md: 16px;
+    out property <length> spacing-lg: 24px;
+    out property <length> spacing-xl: 32px;
+    out property <length> radius-sm: 6px;
+    out property <length> radius-md: 8px;
+    out property <length> radius-lg: 8px;
+}
+
+component SectionTitle inherits Text {
+    vertical-stretch: 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: Theme.text-primary;
+}
+
+component Subtitle inherits Text {
+    vertical-stretch: 0;
+    font-size: 14px;
+    font-weight: 400;
+    color: Theme.text-secondary;
+}
+
+component Label inherits Text {
+    vertical-stretch: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: Theme.text-secondary;
+}
+
+component StatusText inherits Text {
+    vertical-stretch: 0;
+    font-size: 13px;
+    color: Theme.text-secondary;
+}
+
+component SuccessText inherits Text {
+    vertical-stretch: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: Theme.success;
+}
+
+component ErrorText inherits Text {
+    vertical-stretch: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: Theme.error;
+}
+
+component TextField inherits Rectangle {
+    in-out property <string> value;
+    in property <string> placeholder;
+
+    horizontal-stretch: 1;
+    height: 48px;
+    vertical-stretch: 0;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.primary : Theme.border-strong;
+    border-radius: Theme.radius-md;
+    background: Theme.card;
+
+    animate border-color { duration: 150ms; easing: ease-out; }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 0;
+
+        input := TextInput {
+            text <=> root.value;
+            font-size: 14px;
+            color: Theme.text-primary;
+            selection-background-color: Theme.primary;
+            selection-foreground-color: Theme.card;
+        }
+    }
+
+    Text {
+        visible: root.value == "" && !input.has-focus;
+        x: 16px;
+        width: root.width - 32px;
+        height: 100%;
+        text: root.placeholder;
+        font-size: 14px;
+        color: Theme.text-tertiary;
+        vertical-alignment: center;
+    }
+}
+
+component SecondaryButton inherits Rectangle {
+    in property <string> text;
+    callback clicked;
+
+    width: 108px;
+    height: 48px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-width: 1px;
+    border-color: Theme.border-strong;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.hover : Theme.card;
+
+    animate background { duration: 120ms; easing: ease-out; }
+
+    Text {
+        width: 100%;
+        height: 100%;
+        text: root.text;
+        color: Theme.text-primary;
+        font-size: 14px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component PrimaryButton inherits Rectangle {
+    in property <string> text;
+    callback clicked;
+
+    width: 220px;
+    height: 48px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-width: 0px;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.primary-dark : Theme.primary;
+
+    animate background { duration: 150ms; easing: ease-out; }
+
+    Text {
+        width: 100%;
+        height: 100%;
+        text: root.text;
+        color: Theme.card;
+        font-size: 15px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component Card inherits Rectangle {
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    background: Theme.card;
+    border-radius: Theme.radius-lg;
+    border-width: 1px;
+    border-color: Theme.border-subtle;
+}
+
+component PathRow inherits Rectangle {
+    in-out property <string> value;
+    in property <string> label;
+    in property <string> placeholder;
+    callback browse;
+
+    height: 76px;
+    vertical-stretch: 0;
+    background: transparent;
+
+    VerticalLayout {
+        spacing: Theme.spacing-sm;
+        Label { text: root.label; }
+        HorizontalLayout {
+            spacing: Theme.spacing-md;
+            TextField {
+                value <=> root.value;
+                placeholder: root.placeholder;
+            }
+            SecondaryButton { text: "Browse"; clicked => { root.browse(); } }
+        }
+    }
+}
+
+component StatusBadge inherits Rectangle {
+    in property <string> status;
+    
+    width: 116px;
+    height: 28px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: Theme.radius-sm;
+    background: Theme.background;
+
+    HorizontalLayout {
+        spacing: Theme.spacing-xs;
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+
+        Rectangle {
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: root.status == "success" ? Theme.success
+                : root.status == "failed" ? Theme.error
+                : root.status == "skipped" ? Theme.warning
+                : root.status == "processing" ? Theme.primary
+                : Theme.text-secondary;
+        }
+
+        Text {
+            text: root.status;
+            font-size: 12px;
+            font-weight: 600;
+            color: root.status == "success" ? Theme.success
+                : root.status == "failed" ? Theme.error
+                : root.status == "skipped" ? Theme.warning
+                : root.status == "processing" ? Theme.primary
+                : Theme.text-secondary;
+        }
+    }
+}
+
+component ProfileListRow inherits Rectangle {
+    in property <ProfileRow> profile;
+    callback edit-profile(string);
+    callback delete-profile(string);
+    callback toggle-profile(string, bool);
+
+    height: 64px;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    border-width: 1px;
+    border-color: Theme.border;
+    border-radius: Theme.radius-md;
+    background: Theme.card;
+
+    touch := TouchArea {}
+
+    HorizontalLayout {
+        spacing: Theme.spacing-md;
+        padding: 16px;
+
+        CheckBox {
+            checked: root.profile.enabled;
+            toggled => { root.toggle-profile(root.profile.id, self.checked); }
+        }
+
+        VerticalLayout {
+            spacing: Theme.spacing-xs;
+            min-width: 180px;
+
+            Text {
+                text: root.profile.name;
+                font-size: 14px;
+                font-weight: 600;
+                color: Theme.text-primary;
+            }
+
+            Text {
+                text: root.profile.folder;
+                font-size: 12px;
+                color: Theme.text-secondary;
+                overflow: elide;
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        SecondaryButton {
+            text: "Edit";
+            width: 84px;
+            clicked => { root.edit-profile(root.profile.id); }
+        }
+
+        SecondaryButton {
+            text: "Delete";
+            width: 96px;
+            clicked => { root.delete-profile(root.profile.id); }
+        }
+    }
+}
+
+component HistoryListRow inherits Rectangle {
+    in property <HistoryRow> item;
+
+    height: 84px;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    border-width: 1px;
+    border-color: Theme.border;
+    border-radius: Theme.radius-md;
+    background: Theme.card;
+
+    HorizontalLayout {
+        spacing: Theme.spacing-md;
+        padding: 16px;
+
+        StatusBadge {
+            status: root.item.status;
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: Theme.spacing-xs;
+
+            Text {
+                text: root.item.source;
+                font-size: 13px;
+                color: Theme.text-primary;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+            Text {
+                text: root.item.output;
+                font-size: 11px;
+                color: Theme.text-secondary;
+                overflow: elide;
+            }
+
+            ErrorText {
+                visible: root.item.error-message != "";
+                text: root.item.error-message;
+                font-size: 11px;
+                overflow: elide;
+            }
+        }
+
+        VerticalLayout {
+            width: 188px;
+            spacing: Theme.spacing-xs;
+
+            Label {
+                text: "Converted";
+                horizontal-alignment: right;
+            }
+
+            Text {
+                text: root.item.timestamp;
+                font-size: 12px;
+                font-weight: 500;
+                color: Theme.text-secondary;
+                horizontal-alignment: right;
+            }
+
+            Rectangle { vertical-stretch: 1; }
+        }
+    }
+}
+
+
+component TrayHistoryRow inherits Rectangle {
+    in property <HistoryRow> item;
+    callback open-output(string);
+    property <bool> clickable: root.item.status == "success" && root.item.output != "";
+
+    height: 48px;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    border-radius: Theme.radius-sm;
+    background: root.clickable && touch.has-hover ? Theme.hover : transparent;
+
+    animate background { duration: 100ms; easing: ease-out; }
+
+    HorizontalLayout {
+        spacing: Theme.spacing-sm;
+        padding-left: Theme.spacing-sm;
+        padding-right: Theme.spacing-sm;
+        padding-top: 6px;
+        padding-bottom: 6px;
+
+        Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: root.item.status == "success" ? Theme.success
+                : root.item.status == "failed" ? Theme.error
+                : root.item.status == "skipped" ? Theme.warning
+                : root.item.status == "processing" ? Theme.primary
+                : Theme.text-tertiary;
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 0px;
+
+            Text {
+                text: root.item.output != "" ? root.item.output : root.item.source;
+                font-size: 13px;
+                color: Theme.text-primary;
+                overflow: elide;
+            }
+
+            Text {
+                text: root.item.status == "processing" ? "Converting..."
+                    : root.item.status == "success" ? "Converted"
+                    : root.item.status == "failed" && root.item.error-message != "" ? "Failed: " + root.item.error-message
+                    : root.item.status == "failed" ? "Failed"
+                    : root.item.status == "skipped" ? "Skipped"
+                    : root.item.status;
+                font-size: 12px;
+                color: root.item.status == "success" ? Theme.success
+                    : root.item.status == "failed" ? Theme.error
+                    : root.item.status == "skipped" ? Theme.warning
+                    : root.item.status == "processing" ? Theme.primary
+                    : Theme.text-secondary;
+                overflow: elide;
+            }
+        }
+
+        Text {
+            width: 48px;
+            text: root.item.timestamp;
+            font-size: 11px;
+            color: Theme.text-tertiary;
+            horizontal-alignment: right;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => {
+            if (root.clickable) {
+                root.open-output(root.item.output);
+            }
+        }
+    }
+}
+
+export component TrayHistoryWindow inherits Window {
+    in property <[HistoryRow]> history-items;
+    callback open-app();
+    callback quit-app();
+    callback open-output(string);
+
+    title: "Recent Conversions";
+    width: 320px;
+    height: 420px;
+    no-frame: true;
+    always-on-top: true;
+    resize-border-width: 0px;
+    background: transparent;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.card;
+        border-width: 1px;
+        border-color: Theme.border;
+        border-radius: Theme.radius-lg;
+
+        VerticalLayout {
+            spacing: 0px;
+
+            Rectangle {
+                height: 44px;
+                vertical-stretch: 0;
+                background: transparent;
+
+                Text {
+                    x: Theme.spacing-md;
+                    width: parent.width - 2 * Theme.spacing-md;
+                    height: 100%;
+                    text: "Recent Conversions";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text-primary;
+                        }
+            }
+
+            Rectangle { height: 1px; vertical-stretch: 0; background: Theme.border-subtle; }
+
+            if root.history-items.length > 0 : ScrollView {
+                vertical-stretch: 1;
+                viewport-width: self.width;
+
+                VerticalLayout {
+                    padding: Theme.spacing-xs;
+                    spacing: 2px;
+
+                    for item in root.history-items: TrayHistoryRow {
+                        item: item;
+                        open-output(path) => { root.open-output(path); }
+                    }
+                }
+            }
+
+            if root.history-items.length == 0 : Rectangle {
+                vertical-stretch: 1;
+                background: transparent;
+
+                Text {
+                    width: 100%;
+                    height: 100%;
+                    text: "No recent conversions";
+                    font-size: 13px;
+                    color: Theme.text-tertiary;
+                    horizontal-alignment: center;
+                        }
+            }
+
+            Rectangle { height: 1px; vertical-stretch: 0; background: Theme.border-subtle; }
+
+            Rectangle {
+                height: 52px;
+                vertical-stretch: 0;
+                background: transparent;
+
+                HorizontalLayout {
+                    padding-left: Theme.spacing-md;
+                    padding-right: Theme.spacing-md;
+                    padding-top: Theme.spacing-sm;
+                    padding-bottom: Theme.spacing-sm;
+                    spacing: Theme.spacing-sm;
+
+                    SecondaryButton {
+                        text: "Open App";
+                        width: 116px;
+                        height: 36px;
+                        clicked => { root.open-app(); }
+                    }
+
+                    Rectangle { horizontal-stretch: 1; }
+
+                    SecondaryButton {
+                        text: "Quit";
+                        width: 84px;
+                        height: 36px;
+                        clicked => { root.quit-app(); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    in-out property <string> input-path;
+    in-out property <string> output-folder;
+    in-out property <bool> remove-backticks;
+    in-out property <bool> auto-detect-dates;
+    in-out property <bool> delete-source;
+    in-out property <string> status-message: "Ready";
+    
+    in-out property <string> conversion-result: "";
+    in-out property <bool> conversion-success: false;
+
+    in property <[ProfileRow]> profiles;
+    in property <[HistoryRow]> history-items;
+    in-out property <string> profile-name;
+    in-out property <string> watch-folder;
+    in-out property <string> monitor-output-folder;
+    in-out property <bool> process-existing: true;
+    in-out property <bool> monitor-delete-source;
+    in-out property <bool> monitor-auto-detect-dates;
+    in-out property <bool> monitor-csv-enabled: true;
+    in-out property <bool> monitor-xls-enabled: true;
+    in-out property <string> exclude-keywords;
+    in-out property <string> editing-profile-id;
+    in-out property <bool> auto-startup-enabled;
+    in-out property <bool> context-menu-enabled;
+    in-out property <int> active-tab-index;
+
+    callback convert-file();
+    callback add-profile();
+    callback edit-profile(string);
+    callback cancel-profile-edit();
+    callback delete-profile(string);
+    callback toggle-profile(string, bool);
+    callback save-settings();
+    callback browse-input-file();
+    callback browse-output-folder();
+    callback browse-watch-folder();
+    callback browse-monitor-output-folder();
+    callback refresh-history();
+
+    title: "CSV/XLS to XLSX Converter";
+    width: 1080px;
+    height: 760px;
+    init => {
+        Palette.color-scheme = ColorScheme.light;
+    }
+    background: Theme.background;
+
+    TabWidget {
+        current-index: root.active-tab-index;
+
+        Tab {
+            title: "Convert";
+            VerticalLayout {
+                padding: Theme.spacing-lg;
+                spacing: Theme.spacing-sm;
+                
+                SectionTitle { 
+                    text: "Convert Single File"; 
+                }
+                
+                Subtitle {
+                    text: "Choose a CSV or XLS file and convert it to modern XLSX format.";
+                }
+                
+                Card {
+                    VerticalLayout {
+                        padding: Theme.spacing-lg;
+                        spacing: Theme.spacing-lg;
+                        
+                        PathRow {
+                            label: "Input file";
+                            placeholder: "Paste path or click Browse";
+                            value <=> root.input-path;
+                            browse => { root.browse-input-file(); }
+                            horizontal-stretch: 1;
+                        }
+                        
+                        PathRow {
+                            label: "Output folder";
+                            placeholder: "Optional - same as input folder";
+                            value <=> root.output-folder;
+                            browse => { root.browse-output-folder(); }
+                            horizontal-stretch: 1;
+                        }
+                        
+                        HorizontalLayout {
+                            spacing: Theme.spacing-xl;
+                            padding-top: Theme.spacing-xs;
+                            CheckBox { 
+                                text: "Remove backticks"; 
+                                checked <=> root.remove-backticks; 
+                            }
+                            
+                            CheckBox { 
+                                text: "Auto-detect dates"; 
+                                checked <=> root.auto-detect-dates; 
+                            }
+                            
+                            CheckBox { 
+                                text: "Delete original"; 
+                                checked <=> root.delete-source; 
+                            }
+                        }
+                    }
+                }
+                
+                PrimaryButton { 
+                    text: "Convert to XLSX"; 
+                    clicked => { root.convert-file(); }
+                }
+                
+                StatusText { 
+                    text: root.status-message; 
+                    visible: root.status-message != "Ready" && root.conversion-result == "";
+                }
+                
+                SuccessText {
+                    text: "Success: " + root.conversion-result;
+                    visible: root.conversion-success;
+                }
+                
+                ErrorText {
+                    text: "Error: " + root.conversion-result;
+                    visible: root.conversion-result != "" && !root.conversion-success;
+                }
+
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+        Tab {
+            title: "Monitor";
+            VerticalLayout {
+                padding: Theme.spacing-lg;
+                spacing: Theme.spacing-sm;
+                
+                SectionTitle { 
+                    text: "Folder Monitoring Profiles"; 
+                }
+                
+                Subtitle {
+                    text: "Automatically convert files dropped into monitored folders.";
+                }
+                
+                Card {
+                    VerticalLayout {
+                        padding: Theme.spacing-lg;
+                        spacing: Theme.spacing-lg;
+                        
+                        HorizontalLayout {
+                            spacing: Theme.spacing-md;
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: Theme.spacing-md;
+                                
+                                TextField {
+                                    placeholder: "Profile name";
+                                    value <=> root.profile-name;
+                                }
+                                
+                                PathRow {
+                                    label: "Watch folder";
+                                    placeholder: "Folder to monitor";
+                                    value <=> root.watch-folder;
+                                    browse => { root.browse-watch-folder(); }
+                                    horizontal-stretch: 1;
+                                }
+                                
+                                PathRow {
+                                    label: "Output folder";
+                                    placeholder: "Optional - same as watch folder";
+                                    value <=> root.monitor-output-folder;
+                                    browse => { root.browse-monitor-output-folder(); }
+                                    horizontal-stretch: 1;
+                                }
+                            }
+                            
+                            VerticalLayout {
+                                spacing: Theme.spacing-md;
+                                
+                                Label { 
+                                    text: "Options"; 
+                                }
+                                CheckBox { 
+                                    text: "Process existing files"; 
+                                    checked <=> root.process-existing;
+                                }
+                                CheckBox { 
+                                    text: "Delete source after conversion"; 
+                                    checked <=> root.monitor-delete-source;
+                                }
+                                CheckBox { 
+                                    text: "Auto-detect dates"; 
+                                    checked <=> root.monitor-auto-detect-dates;
+                                }
+                                CheckBox { 
+                                    text: "CSV files"; 
+                                    checked <=> root.monitor-csv-enabled;
+                                }
+                                CheckBox { 
+                                    text: "XLS files"; 
+                                    checked <=> root.monitor-xls-enabled;
+                                }
+                            }
+                        }
+                        
+                        TextField {
+                            placeholder: "Exclude keywords (comma-separated, e.g., temp, backup, draft)";
+                            value <=> root.exclude-keywords;
+                        }
+                    }
+                }
+                
+                HorizontalLayout {
+                    spacing: Theme.spacing-md;
+
+                    PrimaryButton {
+                        text: root.editing-profile-id == "" ? "Add Profile" : "Update Profile";
+                        clicked => { root.add-profile(); }
+                    }
+
+                    if root.editing-profile-id != "" : SecondaryButton {
+                        text: "Cancel";
+                        clicked => { root.cancel-profile-edit(); }
+                    }
+                }
+
+                if root.profiles.length > 0 : VerticalLayout {
+                    spacing: Theme.spacing-sm;
+                    padding-top: Theme.spacing-md;
+
+                    Label {
+                        text: "Active Profiles";
+                    }
+                    Rectangle { height: Theme.spacing-xs; }
+
+                    ScrollView {
+                        vertical-stretch: 1;
+                        viewport-width: self.width;
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-sm;
+
+                            for profile in root.profiles: ProfileListRow {
+                                profile: profile;
+                                edit-profile(id) => { root.edit-profile(id); }
+                                delete-profile(id) => { root.delete-profile(id); }
+                                toggle-profile(id, enabled) => { root.toggle-profile(id, enabled); }
+                            }
+                        }
+                    }
+                }
+                if root.profiles.length == 0 : Rectangle {
+                    height: 80px;
+                    border-radius: Theme.radius-md;
+                    background: Theme.background;
+                    HorizontalLayout {
+                        padding: Theme.spacing-md;
+                        spacing: Theme.spacing-md;
+
+                        Text {
+                            text: "Files";
+                            font-size: 18px;
+                            font-weight: 600;
+                            color: Theme.text-secondary;
+                        }
+
+                        Rectangle { width: Theme.spacing-md; }
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-sm;
+
+                            Text {
+                                text: "No profiles created yet";
+                                font-size: 16px;
+                                font-weight: 600;
+                                color: Theme.text-primary;
+                            }
+
+                            Text {
+                                text: "Create one to start monitoring a folder.";
+                                font-size: 13px;
+                                color: Theme.text-secondary;
+                            }
+                        }
+                    }
+                }
+
+                if root.profiles.length == 0 : Rectangle { vertical-stretch: 1; }
+            }
+        }
+        Tab {
+            title: "History";
+            VerticalLayout {
+                padding: Theme.spacing-lg;
+                spacing: Theme.spacing-sm;
+                
+                SectionTitle { 
+                    text: "Conversion History"; 
+                }
+                
+                Subtitle {
+                    text: "Recent conversion activity and results.";
+                }
+                
+                if root.history-items.length > 0 : ScrollView {
+                    vertical-stretch: 1;
+                    viewport-width: self.width;
+
+                    VerticalLayout {
+                        spacing: Theme.spacing-sm;
+
+                        for item in root.history-items: HistoryListRow {
+                            item: item;
+                        }
+                    }
+                }
+                if root.history-items.length == 0 : Rectangle {
+                    height: 120px;
+                    border-radius: Theme.radius-lg;
+                    background: Theme.background;
+                    HorizontalLayout {
+                        padding: Theme.spacing-md;
+                        spacing: Theme.spacing-md;
+
+                        Text {
+                            text: "Files";
+                            font-size: 18px;
+                            font-weight: 600;
+                            color: Theme.text-secondary;
+                        }
+
+                        Rectangle { width: Theme.spacing-md; }
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-sm;
+
+                            Text {
+                                text: "No conversions yet";
+                                font-size: 16px;
+                                font-weight: 600;
+                                color: Theme.text-primary;
+                            }
+
+                            Text {
+                                text: "Convert a file or set up monitoring to get started.";
+                                font-size: 13px;
+                                color: Theme.text-secondary;
+                            }
+                        }
+                    }
+                }
+
+                if root.history-items.length == 0 : Rectangle { vertical-stretch: 1; }
+            }
+        }
+        Tab {
+            title: "Settings";
+            VerticalLayout {
+                padding: Theme.spacing-lg;
+                spacing: Theme.spacing-sm;
+                
+                SectionTitle { 
+                    text: "Application Settings"; 
+                }
+                
+                Subtitle {
+                    text: "Configure how the application behaves.";
+                }
+                
+                Card {
+                    VerticalLayout {
+                        padding: Theme.spacing-lg;
+                        spacing: Theme.spacing-lg;
+                        
+                        Label { 
+                            text: "Startup & Integration"; 
+                            font-size: 14px;
+                            font-weight: 600;
+                        }
+                        
+                        CheckBox { 
+                            text: "Start with Windows"; 
+                            checked <=> root.auto-startup-enabled;
+                        }
+                        
+                        CheckBox { 
+                            text: "Add Explorer context menu"; 
+                            checked <=> root.context-menu-enabled;
+                        }
+                        
+                        StatusText {
+                            text: "After enabling, you may need to restart the application for changes to take effect.";
+                            font-size: 12px;
+                            color: Theme.text-secondary;
+                            opacity: 0.8;
+                        }
+                    }
+                }
+                
+                PrimaryButton { 
+                    text: "Save Settings"; 
+                    clicked => { root.save-settings(); }
+                }
+                
+                StatusText { 
+                    text: "Settings are stored in %APPDATA%\\csv-xls-converter\\profiles.json"; 
+                    font-size: 11px;
+                    opacity: 0.7;
+                }
+
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+    }
+}

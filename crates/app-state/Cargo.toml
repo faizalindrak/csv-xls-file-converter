@@ -1,0 +1,12 @@
+[package]
+name = "app-state"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+dirs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true

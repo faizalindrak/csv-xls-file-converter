@@ -1,0 +1,24 @@
+[package]
+name = "converter-cli"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[lib]
+name = "converter_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "csv-xls-converter"
+path = "src/main.rs"
+
+[dependencies]
+app-state = { path = "../app-state" }
+clap.workspace = true
+converter-core = { path = "../converter-core" }
+notify.workspace = true
+platform-windows = { path = "../platform-windows" }
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,93 +1,101 @@
 # CSV/XLS to XLSX Converter
 
-A robust tool to convert CSV and XLS files to XLSX format. It features a modern GUI, a command-line interface, and an automated folder monitoring system.
+A Windows-focused converter for CSV and legacy XLS files, with a Slint GUI, a Rust CLI, and folder monitoring for automated conversion workflows.
 
 ## Features
 
-- **Convert CSV to XLSX**: Handles various delimiters and encodings automatically.
-- **Convert XLS to XLSX**: Uses Windows Script Host (requires Excel) to convert legacy XLS files.
-- **Folder Monitoring**: Watch a folder for new files and automatically convert them.
-- **Date Detection (Beta)**: Intelligent auto-detection of date formats (DD/MM/YYYY vs MM/DD/YYYY).
-- **Modern GUI**: Built with PySide6 and PyQt-Fluent-Widgets for a native Windows 11 look and feel.
-- **CLI Support**: Full command-line interface for automation and scripting.
-- **Optimization**: Batch processing for handling large numbers of files efficiently.
+- **CSV to XLSX**: Handles encodings, delimiter parsing, text preservation, formula escaping, and Excel-safe XML sanitization.
+- **XLS to XLSX**: Uses Windows Script Host and Microsoft Excel automation for legacy XLS files.
+- **Folder Monitoring**: Watches a folder for new CSV/XLS files and converts them automatically.
+- **Date Detection (Beta)**: Detects common DMY and MDY date columns during CSV conversion.
+- **Slint GUI**: Native Rust desktop interface for single-file conversion, profiles, history, and settings.
+- **CLI Support**: Automation-friendly command-line interface for one-off conversion and monitoring.
 
 ## Requirements
 
-- Python 3.8+
-- Microsoft Excel (required for XLS to XLSX conversion on Windows)
-- Windows (recommended for full feature support, though CSV conversion works cross-platform)
+- Rust stable toolchain for source builds: https://rustup.rs
+- Microsoft Excel on Windows for XLS to XLSX conversion
+- Windows for full feature support; CSV conversion builds cross-platform
+- Inno Setup 6.x only when building the Windows installer
 
-## Installation
+## Development Setup
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/faizalindrak/csv-xls-file-converter.git
-   cd csv-xls-file-converter
-   ```
-
-2. Create a virtual environment (optional but recommended):
-   ```bash
-   python -m venv venv
-   # Windows
-   venv\Scripts\activate
-   # Linux/Mac
-   source venv/bin/activate
-   ```
-
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+git clone https://github.com/faizalindrak/csv-xls-file-converter.git
+cd csv-xls-file-converter
+cargo test --workspace
+```
 
 ## Usage
 
-### GUI Mode
+### GUI
 
-Run the graphical interface:
+Run the Slint GUI from source:
+
 ```bash
-python gui.py
-```
-- **Convert File**: Select a single file to convert immediately.
-- **Monitor Folder**: Choose a folder to watch. Any CSV/XLS file dropped there will be converted automatically.
-
-### Command Line Interface (CLI)
-
-The `file_converter.py` script provides a powerful CLI.
-
-**Convert a single file:**
-```bash
-python file_converter.py input.csv
-python file_converter.py input.xls -o output.xlsx
+cargo run -p converter-gui
 ```
 
-**Monitor a folder:**
+Build and run the release GUI:
+
 ```bash
-# Basic monitoring
-python file_converter.py --monitor "C:\path\to\folder"
-
-# Monitor and output to a specific directory
-python file_converter.py --monitor "C:\input" --output "C:\output"
-
-# Delete source files after conversion
-python file_converter.py --monitor "C:\input" --delete-source
-
-# Exclude files by keyword (skip conversion)
-python file_converter.py --monitor "C:\input" --exclude "temp,backup,draft"
+cargo build --release -p converter-gui
+target\release\csv-xls-converter-gui.exe
 ```
 
-**Options:**
+### CLI
+
+Convert a single file:
+
+```bash
+cargo run -p converter-cli -- input.csv
+cargo run -p converter-cli -- input.xls --output output.xlsx
+```
+
+Monitor a folder:
+
+```bash
+cargo run -p converter-cli -- --monitor "C:\path\to\folder"
+cargo run -p converter-cli -- --monitor "C:\input" --output "C:\output"
+cargo run -p converter-cli -- --monitor "C:\input" --delete-source
+cargo run -p converter-cli -- --monitor "C:\input" --exclude "temp,backup,draft"
+```
+
+CLI options:
+
 - `--monitor FOLDER`: Watch a folder for new files.
 - `-o, --output PATH`: Specify output file or folder.
 - `--delete-source`: Delete original files after successful conversion.
-- `--skip-existing`: Don't process files already present in the folder (monitor mode only).
+- `--skip-existing`: Do not process files already present in the folder.
 - `--remove-backticks`: Remove leading backticks from text columns.
-- `--exclude KEYWORDS`: Comma-separated keywords; files containing any keyword in their filename are skipped (monitor mode only).
+- `--silent`: Suppress console output and use Windows notification hooks when available.
+- `--exclude KEYWORDS`: Comma-separated keywords; matching filenames are skipped in monitor mode.
+
+## Building Releases
+
+Build the portable GUI and CLI executables:
+
+```bat
+build.bat
+```
+
+Build the executables and Windows installer:
+
+```bat
+build.bat full
+```
+
+Build outputs:
+
+- `dist\CSV-XLS-Converter.exe`: Slint GUI executable, also used for Explorer `--silent` context-menu conversion.
+- `dist\CSV-XLS-Converter-CLI.exe`: Command-line executable for automation.
+- `dist\CSV-XLS-Converter-Setup-{version}.exe`: Windows installer, created by `build.bat full`.
 
 ## Notes
 
-- **XLS Conversion**: Requires Microsoft Excel installed on the machine as it uses VBScript automation. This feature is Windows-only.
-- **Date Detection**: The date detection is in Beta. It attempts to distinguish between DMY and MDY formats based on column analysis.
+- XLS conversion is Windows-only and requires Microsoft Excel because it uses VBScript automation through `cscript`.
+- Settings remain compatible with `%APPDATA%\csv-xls-converter\profiles.json` from the Python app.
+- The Python implementation files are retained for reference during the port, but release builds now use the Rust workspace.
 
 ## License
 
