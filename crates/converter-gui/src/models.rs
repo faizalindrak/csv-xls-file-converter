@@ -19,9 +19,20 @@ pub fn profile_model(profiles: &[MonitorProfile]) -> ModelRc<ProfileRow> {
     ModelRc::from(Rc::new(VecModel::from(rows)))
 }
 
+const TRAY_HISTORY_LIMIT: usize = 20;
+
 pub fn history_model(history: &[ConversionHistoryItem]) -> ModelRc<HistoryRow> {
+    history_model_from_items(history.iter())
+}
+
+pub(crate) fn tray_history_model(history: &[ConversionHistoryItem]) -> ModelRc<HistoryRow> {
+    history_model_from_items(history.iter().take(TRAY_HISTORY_LIMIT))
+}
+
+fn history_model_from_items<'a>(
+    history: impl Iterator<Item = &'a ConversionHistoryItem>,
+) -> ModelRc<HistoryRow> {
     let rows = history
-        .iter()
         .map(|item| HistoryRow {
             source: SharedString::from(item.source_path.clone()),
             output: SharedString::from(item.output_path.clone()),
@@ -55,7 +66,9 @@ fn format_history_timestamp(timestamp: f64) -> SharedString {
 
 #[cfg(test)]
 mod tests {
+    use app_state::ConversionHistoryItem;
     use chrono::{Local, TimeZone};
+    use slint::Model;
 
     #[test]
     fn format_history_timestamp_converts_unix_seconds_to_local_text() {
@@ -75,5 +88,38 @@ mod tests {
         let formatted = super::format_history_timestamp(f64::NAN);
 
         assert_eq!(formatted.as_str(), "");
+    }
+
+    #[test]
+    fn tray_history_model_limits_to_twenty_newest_items() {
+        let history = (0..25)
+            .map(|index| ConversionHistoryItem {
+                source_path: format!(r"C:\input\file-{index}.csv"),
+                output_path: format!(r"C:\output\file-{index}.xlsx"),
+                status: "success".to_string(),
+                timestamp: index as f64,
+                error_message: String::new(),
+            })
+            .collect::<Vec<_>>();
+
+        let model = super::tray_history_model(&history);
+
+        assert_eq!(model.row_count(), 20);
+        assert_eq!(
+            model
+                .row_data(0)
+                .expect("first tray history row should exist")
+                .source
+                .as_str(),
+            r"C:\input\file-0.csv"
+        );
+        assert_eq!(
+            model
+                .row_data(19)
+                .expect("twentieth tray history row should exist")
+                .source
+                .as_str(),
+            r"C:\input\file-19.csv"
+        );
     }
 }

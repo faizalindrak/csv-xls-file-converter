@@ -1,11 +1,20 @@
 use std::cell::RefCell;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use slint::winit_030::{EventResult, WinitWindowAccessor};
 use slint::{ComponentHandle, Weak};
 
-use crate::AppWindow;
+use app_state::ConversionHistoryItem;
+
+use crate::models::tray_history_model;
+use crate::tray_popup::{
+    activation_from_tray_event, default_tray_anchor, is_tray_history_row_clickable,
+    open_output_path, popup_position_for, route_tray_activation, work_area_for_app, PopupSize,
+    TrayAction, TRAY_POPUP_HEIGHT, TRAY_POPUP_WIDTH,
+};
+use crate::{AppWindow, TrayHistoryWindow};
 
 const TRAY_SHOW_ID: &str = "tray.show";
 const TRAY_HIDE_ID: &str = "tray.hide";
@@ -24,6 +33,7 @@ pub struct TrayController {
     close_guard: Arc<CloseGuard>,
     quit_handler: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
     ready: AtomicBool,
+    history_snapshot: Mutex<Vec<ConversionHistoryItem>>,
 }
 
 #[derive(Default)]
@@ -37,6 +47,7 @@ struct TrayUiState {
     _hide_item: tray_icon::menu::MenuItem,
     _quit_item: tray_icon::menu::MenuItem,
     _tray_icon: tray_icon::TrayIcon,
+    tray_popup: TrayHistoryWindow,
 }
 
 impl CloseGuard {
@@ -51,15 +62,18 @@ impl CloseGuard {
 
 impl TrayController {
     pub fn new(app: &AppWindow) -> Arc<Self> {
-        let controller = Arc::new(Self {
+        Arc::new(Self {
             app: app.as_weak(),
             close_guard: Arc::new(CloseGuard::default()),
             quit_handler: Mutex::new(None),
             ready: AtomicBool::new(false),
-        });
-        controller.configure_event_handlers();
-        controller.schedule_install();
-        controller
+            history_snapshot: Mutex::new(Vec::new()),
+        })
+    }
+
+    pub fn install_after_window_shown(self: &Arc<Self>) {
+        self.configure_event_handlers();
+        self.schedule_install();
     }
 
     pub fn set_quit_handler<F>(&self, handler: F)
@@ -79,6 +93,25 @@ impl TrayController {
             return EventResult::PreventDefault;
         }
         EventResult::Propagate
+    }
+
+    pub fn update_history(&self, history: Vec<ConversionHistoryItem>) {
+        {
+            let mut snapshot = self
+                .history_snapshot
+                .lock()
+                .expect("tray history snapshot lock poisoned");
+            *snapshot = history.clone();
+        }
+
+        let _ = self.app.upgrade_in_event_loop(move |_| {
+            TRAY_UI_STATE.with(|state| {
+                if let Some(ui) = state.borrow().as_ref() {
+                    ui.tray_popup
+                        .set_history_items(tray_history_model(&history));
+                }
+            });
+        });
     }
 
     fn configure_event_handlers(self: &Arc<Self>) {
@@ -125,7 +158,7 @@ impl TrayController {
         }
     }
 
-    fn install_tray(&self) -> Result<(), String> {
+    fn install_tray(self: &Arc<Self>) -> Result<(), String> {
         let menu = tray_icon::menu::Menu::new();
         let show_item = tray_icon::menu::MenuItem::with_id(TRAY_SHOW_ID, "Open", true, None);
         let hide_item = tray_icon::menu::MenuItem::with_id(TRAY_HIDE_ID, "Hide", true, None);
@@ -133,6 +166,10 @@ impl TrayController {
         let separator = tray_icon::menu::PredefinedMenuItem::separator();
         menu.append_items(&[&show_item, &hide_item, &separator, &quit_item])
             .map_err(|error| error.to_string())?;
+
+        let tray_popup = TrayHistoryWindow::new().map_err(|error| error.to_string())?;
+        self.configure_popup_callbacks(&tray_popup);
+        self.apply_popup_history(&tray_popup);
 
         let tray_icon = tray_icon::TrayIconBuilder::new()
             .with_menu(Box::new(menu.clone()))
@@ -150,6 +187,7 @@ impl TrayController {
                 _hide_item: hide_item,
                 _quit_item: quit_item,
                 _tray_icon: tray_icon,
+                tray_popup,
             });
         });
 
@@ -157,31 +195,109 @@ impl TrayController {
         Ok(())
     }
 
-    fn handle_tray_event(&self, event: tray_icon::TrayIconEvent) {
-        use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
-
-        match event {
-            TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
+    fn configure_popup_callbacks(self: &Arc<Self>, popup: &TrayHistoryWindow) {
+        let controller = Arc::downgrade(self);
+        popup.on_open_app(move || {
+            if let Some(controller) = controller.upgrade() {
+                controller.hide_tray_popup();
+                controller.show_history_window();
             }
-            | TrayIconEvent::DoubleClick {
-                button: MouseButton::Left,
-                ..
-            } => self.show_window(),
-            _ => {}
+        });
+
+        let controller = Arc::downgrade(self);
+        popup.on_quit_app(move || {
+            if let Some(controller) = controller.upgrade() {
+                controller.hide_tray_popup();
+                controller.quit_application();
+            }
+        });
+
+        let controller = Arc::downgrade(self);
+        popup.on_open_output(move |output| {
+            if let Some(controller) = controller.upgrade() {
+                if !is_tray_history_row_clickable("success", output.as_str()) {
+                    return;
+                }
+                controller.hide_tray_popup();
+                if let Err(error) = open_output_path(Path::new(output.as_str())) {
+                    controller.push_status_message(error);
+                }
+            }
+        });
+    }
+
+    fn handle_tray_event(&self, event: tray_icon::TrayIconEvent) {
+        let (activation, anchor) = activation_from_tray_event(&event);
+        match route_tray_activation(activation) {
+            TrayAction::ShowPopup => {
+                let anchor = anchor.unwrap_or_else(default_tray_anchor);
+                self.show_tray_popup(anchor);
+            }
+            TrayAction::ShowMainWindow => self.show_history_window(),
+            TrayAction::Ignore => {}
         }
     }
 
     fn handle_menu_event(&self, event: tray_icon::menu::MenuEvent) {
         if event.id == TRAY_SHOW_ID {
-            self.show_window();
+            self.show_history_window();
         } else if event.id == TRAY_HIDE_ID {
             self.hide_window(TRAY_READY_MESSAGE);
         } else if event.id == TRAY_QUIT_ID {
             self.quit_application();
         }
+    }
+
+    fn apply_popup_history(&self, popup: &TrayHistoryWindow) {
+        let history = self
+            .history_snapshot
+            .lock()
+            .expect("tray history snapshot lock poisoned")
+            .clone();
+        popup.set_history_items(tray_history_model(&history));
+    }
+
+    fn show_tray_popup(&self, anchor: TrayAnchor) {
+        let history = self
+            .history_snapshot
+            .lock()
+            .expect("tray history snapshot lock poisoned")
+            .clone();
+        let _ = self.app.upgrade_in_event_loop(move |app| {
+            let work_area = work_area_for_app(&app, anchor);
+            let point = popup_position_for(
+                anchor,
+                work_area,
+                PopupSize {
+                    width: TRAY_POPUP_WIDTH,
+                    height: TRAY_POPUP_HEIGHT,
+                },
+            );
+
+            TRAY_UI_STATE.with(|state| {
+                if let Some(ui) = state.borrow().as_ref() {
+                    ui.tray_popup
+                        .set_history_items(tray_history_model(&history));
+                    ui.tray_popup
+                        .window()
+                        .set_position(slint::PhysicalPosition::new(point.x, point.y));
+                    let _ = ui.tray_popup.show();
+                    ui.tray_popup.window().with_winit_window(|window| {
+                        window.focus_window();
+                    });
+                }
+            });
+        });
+    }
+
+    fn hide_tray_popup(&self) {
+        let _ = self.app.upgrade_in_event_loop(move |_| {
+            TRAY_UI_STATE.with(|state| {
+                if let Some(ui) = state.borrow().as_ref() {
+                    let _ = ui.tray_popup.hide();
+                }
+            });
+        });
     }
 
     fn hide_window(&self, status_message: &str) {
@@ -192,14 +308,15 @@ impl TrayController {
         });
     }
 
-    fn show_window(&self) {
+    fn show_history_window(&self) {
         let _ = self.app.upgrade_in_event_loop(move |app| {
+            app.set_active_tab_index(2);
             app.window().set_minimized(false);
             let _ = app.show();
             app.window().with_winit_window(|window| {
                 window.focus_window();
             });
-            app.set_status_message("Window restored from system tray.".into());
+            app.set_status_message("History restored from system tray.".into());
         });
     }
 

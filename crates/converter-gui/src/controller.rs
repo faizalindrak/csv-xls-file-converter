@@ -32,7 +32,7 @@ const HISTORY_LIMIT: usize = 200;
 const FILE_READY_ATTEMPTS: usize = 30;
 const FILE_READY_RETRY_DELAY: Duration = Duration::from_millis(750);
 
-pub fn load_initial_state(app: &AppWindow) {
+pub fn load_initial_state(app: &AppWindow, tray: &TrayController) {
     if let Ok(path) = profiles_path() {
         if let Ok(doc) = load_profiles_from(path) {
             app.set_remove_backticks(doc.single_file_settings.remove_backticks);
@@ -45,11 +45,11 @@ pub fn load_initial_state(app: &AppWindow) {
         }
     }
     sync_windows_integration_state(app);
-    refresh_history(app);
+    refresh_history(app, tray);
 }
 
 pub fn wire_callbacks(app: &AppWindow, tray: Arc<TrayController>) {
-    let context = Arc::new(ControllerContext::new(app));
+    let context = Arc::new(ControllerContext::new(app, tray.clone()));
     context.start_enabled_profiles();
     wire_conversion(app, context.clone());
     wire_browse_actions(app);
@@ -68,13 +68,15 @@ pub fn wire_callbacks(app: &AppWindow, tray: Arc<TrayController>) {
 struct ControllerContext {
     app: Weak<AppWindow>,
     monitor_manager: Arc<MonitorManager>,
+    tray: Arc<TrayController>,
 }
 
 impl ControllerContext {
-    fn new(app: &AppWindow) -> Self {
+    fn new(app: &AppWindow, tray: Arc<TrayController>) -> Self {
         Self {
             app: app.as_weak(),
-            monitor_manager: Arc::new(MonitorManager::new(app.as_weak())),
+            monitor_manager: Arc::new(MonitorManager::new(app.as_weak(), tray.clone())),
+            tray,
         }
     }
 
@@ -117,6 +119,7 @@ impl ControllerContext {
 
 struct MonitorManager {
     app: Weak<AppWindow>,
+    tray: Arc<TrayController>,
     state: Mutex<MonitorManagerState>,
 }
 
@@ -131,9 +134,10 @@ struct MonitorWorkerHandle {
 }
 
 impl MonitorManager {
-    fn new(app: Weak<AppWindow>) -> Self {
+    fn new(app: Weak<AppWindow>, tray: Arc<TrayController>) -> Self {
         Self {
             app,
+            tray,
             state: Mutex::new(MonitorManagerState {
                 workers: HashMap::new(),
             }),
@@ -173,7 +177,12 @@ impl MonitorManager {
             }
 
             let stop = Arc::new(AtomicBool::new(false));
-            let runtime = MonitorRuntime::new(self.app.clone(), profile.clone(), stop.clone());
+            let runtime = MonitorRuntime::new(
+                self.app.clone(),
+                self.tray.clone(),
+                profile.clone(),
+                stop.clone(),
+            );
             let profile_id = profile.id.clone();
             let profile_name = profile.name.clone();
             let thread = thread::spawn(move || runtime.run());
@@ -235,6 +244,7 @@ impl Drop for MonitorManager {
 
 struct MonitorRuntime {
     app: Weak<AppWindow>,
+    tray: Arc<TrayController>,
     profile: MonitorProfile,
     stop: Arc<AtomicBool>,
     history: Arc<Mutex<Vec<ConversionHistoryItem>>>,
@@ -242,9 +252,15 @@ struct MonitorRuntime {
 }
 
 impl MonitorRuntime {
-    fn new(app: Weak<AppWindow>, profile: MonitorProfile, stop: Arc<AtomicBool>) -> Self {
+    fn new(
+        app: Weak<AppWindow>,
+        tray: Arc<TrayController>,
+        profile: MonitorProfile,
+        stop: Arc<AtomicBool>,
+    ) -> Self {
         Self {
             app,
+            tray,
             profile,
             stop,
             history: Arc::new(Mutex::new(load_history().unwrap_or_default())),
@@ -501,6 +517,7 @@ impl MonitorRuntime {
         if let Ok(path) = history_path() {
             let _ = save_history_to(path, &snapshot);
         }
+        self.tray.update_history(snapshot.clone());
         let _ = self.app.upgrade_in_event_loop(move |app| {
             app.set_history_items(history_model(&snapshot));
         });
@@ -624,6 +641,7 @@ fn wire_conversion(app: &AppWindow, context: Arc<ControllerContext>) {
             };
 
             let snapshot = load_history().unwrap_or_default();
+            context_clone.tray.update_history(snapshot.clone());
             let _ = weak.upgrade_in_event_loop(move |app| {
                 app.set_history_items(history_model(&snapshot));
             });
@@ -1032,9 +1050,10 @@ fn current_executable_string() -> Result<String, String> {
         .map_err(|error| format!("could not resolve current executable path: {error}"))
 }
 
-fn refresh_history(app: &AppWindow) {
+fn refresh_history(app: &AppWindow, tray: &TrayController) {
     if let Ok(path) = history_path() {
         if let Ok(history) = load_history_from(path) {
+            tray.update_history(history.clone());
             app.set_history_items(history_model(&history));
         }
     }
